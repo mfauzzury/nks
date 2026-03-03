@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -11,6 +11,66 @@ enum PublishStatus {
   draft
   published
   archived
+}
+
+enum PayerType {
+  individu
+  korporat
+  majikan_spg
+}
+
+enum PayerStatus {
+  active
+  inactive
+  suspended
+  merged
+}
+
+enum IdentityType {
+  mykad
+  passport
+  ssm
+  tax
+  other
+}
+
+enum DeductionMode {
+  fixed
+  percent
+}
+
+enum DuplicateSource {
+  spg_import
+  manual
+}
+
+enum DuplicateCaseStatus {
+  open
+  reviewed
+  merged
+  rejected
+}
+
+enum BlacklistAction {
+  add
+  remove
+  update
+}
+
+enum SpgPayrollPaymentChannel {
+  FPX_B2B
+  CARD
+  CHEQUE
+  COUNTER_CASH
+}
+
+enum SpgPayrollBatchStatus {
+  draft_preview
+  awaiting_online_payment
+  pending_payment
+  paid_success
+  paid_failed
+  cancelled
 }
 
 model User {
@@ -24,13 +84,19 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]
+  duplicateCasesDetected  DuplicateCase[]
+  mergeExecutions         MergeExecution[]
+  statusChanges           PayerStatusHistory[]
+  blacklistChanges        PayerBlacklistHistory[]
+  profileAuditsPerformed  AuditLogProfile[]
+  spgPayrollStatusChanges SpgPayrollStatusHistory[]
 }
 
 model Role {
   id          Int      @id @default(autoincrement())
   name        String   @unique
   description String   @default("")
-  permissions String   @default("[]")
+  permissions String   @default("[]") @db.VarChar(5000)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -51,8 +117,8 @@ model Post {
   id              Int           @id @default(autoincrement())
   title           String
   slug            String        @unique
-  excerpt         String?
-  content         String
+  excerpt         String?       @db.Text
+  content         String        @db.LongText
   status          PublishStatus @default(draft)
   featuredImageId Int?
   publishedAt     DateTime?
@@ -69,7 +135,7 @@ model Category {
   id          Int      @id @default(autoincrement())
   name        String
   slug        String   @unique
-  description String?
+  description String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   posts       Post[]
@@ -81,7 +147,7 @@ model Page {
   id              Int           @id @default(autoincrement())
   title           String
   slug            String        @unique
-  content         String
+  content         String        @db.LongText
   status          PublishStatus @default(draft)
   featuredImageId Int?
   publishedAt     DateTime?
@@ -98,8 +164,8 @@ model Media {
   filename     String
   originalName String
   title        String?
-  caption      String?
-  description  String?
+  caption      String?  @db.Text
+  description  String?  @db.Text
   mimeType     String
   size         Int
   width        Int?
@@ -116,6 +182,344 @@ model Media {
 
 model Setting {
   key       String   @id
-  value     String
+  value     String   @db.Text
   updatedAt DateTime @updatedAt
+}
+
+model PayerProfile {
+  id                 Int                     @id @default(autoincrement())
+  payerCode          String                  @unique
+  payerType          PayerType
+  displayName        String
+  identityNo         String?
+  identityType       IdentityType?
+  email              String?
+  phone              String?
+  passwordHash       String?
+  status             PayerStatus             @default(active)
+  isBlacklisted      Boolean                 @default(false)
+  blacklistReason    String?                 @db.Text
+  blacklistFrom      DateTime?
+  blacklistTo        DateTime?
+  mergedIntoPayerId  Int?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  mergedInto         PayerProfile?           @relation("PayerMergeRelation", fields: [mergedIntoPayerId], references: [id], onDelete: SetNull)
+  mergedChildren     PayerProfile[]          @relation("PayerMergeRelation")
+  individual         PayerIndividual?
+  corporate          PayerCorporate?
+  spgEmployer        SpgEmployer?
+  spgEmployees       SpgEmployee[]           @relation("EmployerEmployees")
+  linkedEmployee     SpgEmployee[]           @relation("LinkedIndividual")
+  addresses          PayerAddress[]
+  contactPersons     PayerContactPerson[]
+  branches           CorporateBranch[]
+  shareholders       CorporateShareholder[]
+  documents          PayerDocument[]
+  duplicateMatches   DuplicateMatch[]        @relation("CandidatePayer")
+  mergeMasterRecords MergeExecution[]        @relation("MergeMaster")
+  mergeMergedRecords MergeExecution[]        @relation("MergeMerged")
+  statusHistory      PayerStatusHistory[]
+  blacklistHistory   PayerBlacklistHistory[]
+  auditLogs          AuditLogProfile[]       @relation("AuditTargetPayer")
+  spgPayrollBatches  SpgPayrollBatch[]
+
+  @@unique([identityType, identityNo])
+  @@index([payerType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PayerIndividual {
+  payerId           Int          @id
+  fullName          String
+  mykadOrPassport   String       @unique
+  dob               DateTime?
+  gender            String?
+  maritalStatus     String?
+  occupation        String?
+  incomeSource      String?
+  monthlyIncome     Decimal?     @db.Decimal(18, 2)
+  payer             PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([fullName])
+}
+
+model PayerCorporate {
+  payerId      Int          @id
+  companyName  String
+  ssmNo        String       @unique
+  companyType  String?
+  taxNo        String?
+  taxBranch    String?
+  payer        PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([companyName])
+}
+
+model SpgEmployer {
+  payerId                 Int           @id
+  agreementNo             String?
+  agreementEffectiveDate  DateTime?
+  agreementExpiryDate     DateTime?
+  deductionMode           DeductionMode?
+  deductionValue          Decimal?      @db.Decimal(18, 2)
+  deductionCap            Decimal?      @db.Decimal(18, 2)
+  payer                   PayerProfile  @relation(fields: [payerId], references: [id], onDelete: Cascade)
+}
+
+model SpgEmployee {
+  id                      Int           @id @default(autoincrement())
+  employerPayerId         Int
+  employeeIdentityNo      String
+  employeeName            String
+  employeeEmail           String?
+  employeePhone           String?
+  deductionAmount         Decimal?      @db.Decimal(18, 2)
+  employmentStatus        String?
+  linkedIndividualPayerId Int?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  employer                PayerProfile  @relation("EmployerEmployees", fields: [employerPayerId], references: [id], onDelete: Cascade)
+  linkedIndividual        PayerProfile? @relation("LinkedIndividual", fields: [linkedIndividualPayerId], references: [id], onDelete: SetNull)
+  duplicateMatches        DuplicateMatch[]
+
+  @@index([employerPayerId])
+  @@index([employeeIdentityNo])
+}
+
+model PayerAddress {
+  id          Int          @id @default(autoincrement())
+  payerId     Int
+  addressType String
+  line1       String
+  line2       String?
+  city        String?
+  state       String?
+  postcode    String?
+  country     String?
+  isPrimary   Boolean      @default(false)
+  payer       PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId])
+}
+
+model PayerContactPerson {
+  id           Int          @id @default(autoincrement())
+  payerId      Int
+  name         String
+  icNo         String?
+  position     String?
+  email        String?
+  phone        String?
+  isAuthorized Boolean      @default(false)
+  payer        PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId])
+}
+
+model CorporateBranch {
+  id        Int          @id @default(autoincrement())
+  payerId   Int
+  branchName String
+  line1     String?
+  line2     String?
+  city      String?
+  state     String?
+  postcode  String?
+  country   String?
+  payer     PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId])
+}
+
+model CorporateShareholder {
+  id               Int          @id @default(autoincrement())
+  payerId          Int
+  name             String
+  ownershipPercent Decimal?     @db.Decimal(5, 2)
+  payer            PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId])
+}
+
+model PayerDocument {
+  id         Int          @id @default(autoincrement())
+  payerId    Int
+  docType    String
+  docNo      String?
+  fileUrl    String?
+  verifiedAt DateTime?
+  verifiedBy String?
+  payer      PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId])
+}
+
+model DuplicateCase {
+  id          Int                 @id @default(autoincrement())
+  source      DuplicateSource
+  status      DuplicateCaseStatus @default(open)
+  detectedAt  DateTime            @default(now())
+  detectedBy  Int?
+  notes       String?             @db.Text
+  detectedByUser User?            @relation(fields: [detectedBy], references: [id], onDelete: SetNull)
+  matches     DuplicateMatch[]
+
+  @@index([status, detectedAt])
+}
+
+model DuplicateMatch {
+  id                  Int           @id @default(autoincrement())
+  caseId              Int
+  candidatePayerId    Int
+  matchedSpgEmployeeId Int
+  matchScore          Decimal       @db.Decimal(5, 2)
+  matchReasonJson     Json?
+  duplicateCase       DuplicateCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  candidatePayer      PayerProfile  @relation("CandidatePayer", fields: [candidatePayerId], references: [id], onDelete: Cascade)
+  matchedSpgEmployee  SpgEmployee   @relation(fields: [matchedSpgEmployeeId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([candidatePayerId])
+}
+
+model MergeExecution {
+  id                    Int          @id @default(autoincrement())
+  masterPayerId         Int
+  mergedPayerId         Int
+  executedBy            Int
+  executedAt            DateTime     @default(now())
+  conflictResolutionJson Json?
+  summaryJson           Json?
+  masterPayer           PayerProfile @relation("MergeMaster", fields: [masterPayerId], references: [id], onDelete: Cascade)
+  mergedPayer           PayerProfile @relation("MergeMerged", fields: [mergedPayerId], references: [id], onDelete: Cascade)
+  executedByUser        User         @relation(fields: [executedBy], references: [id], onDelete: Restrict)
+}
+
+model PayerStatusHistory {
+  id        Int          @id @default(autoincrement())
+  payerId   Int
+  oldStatus PayerStatus?
+  newStatus PayerStatus
+  changedBy Int?
+  changedAt DateTime     @default(now())
+  reason    String?      @db.Text
+  payer     PayerProfile @relation(fields: [payerId], references: [id], onDelete: Cascade)
+  changedByUser User?         @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+
+  @@index([payerId, changedAt])
+}
+
+model PayerBlacklistHistory {
+  id        Int             @id @default(autoincrement())
+  payerId   Int
+  action    BlacklistAction
+  reason    String?         @db.Text
+  fromDate  DateTime?
+  toDate    DateTime?
+  changedBy Int?
+  changedAt DateTime        @default(now())
+  payer     PayerProfile    @relation(fields: [payerId], references: [id], onDelete: Cascade)
+  changedByUser User?         @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+
+  @@index([payerId, changedAt])
+}
+
+model AuditLogProfile {
+  id              Int          @id @default(autoincrement())
+  entityName      String
+  entityId        String
+  action          String
+  targetPayerId   Int?
+  oldValueJson    Json?
+  newValueJson    Json?
+  performedBy     Int?
+  performedAt     DateTime     @default(now())
+  ipAddress       String?
+  targetPayer     PayerProfile? @relation("AuditTargetPayer", fields: [targetPayerId], references: [id], onDelete: SetNull)
+  performedByUser User?        @relation(fields: [performedBy], references: [id], onDelete: SetNull)
+
+  @@index([entityName, entityId])
+  @@index([targetPayerId, performedAt])
+}
+
+model GuestPayment {
+  id            Int      @id @default(autoincrement())
+  receiptNo     String   @unique
+  guestName     String
+  identityNo    String
+  email         String?
+  amount        Decimal  @db.Decimal(18, 2)
+  paymentMethod String
+  status        String   @default("success")
+  paidAt        DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([identityNo, paidAt])
+}
+
+model SpgPayrollBatch {
+  id                Int                      @id @default(autoincrement())
+  referenceNo       String                   @unique
+  employerPayerId   Int
+  month             Int
+  year              Int
+  paymentChannel    SpgPayrollPaymentChannel
+  status            SpgPayrollBatchStatus    @default(draft_preview)
+  currency          String                   @default("MYR")
+  totalAmount       Decimal                  @db.Decimal(18, 2)
+  rowCount          Int                      @default(0)
+  supportingSlipUrl String?
+  officialReceiptNo String?
+  submittedAt       DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  employer          PayerProfile             @relation(fields: [employerPayerId], references: [id], onDelete: Cascade)
+  lines             SpgPayrollLine[]
+  statusHistory     SpgPayrollStatusHistory[]
+  receipt           SpgPayrollReceipt?
+
+  @@index([employerPayerId, year, month, status])
+  @@index([employerPayerId, month, year, referenceNo])
+}
+
+model SpgPayrollLine {
+  id                        Int             @id @default(autoincrement())
+  batchId                   Int
+  employeeName              String
+  employeeIdentityNo        String
+  amount                    Decimal         @db.Decimal(18, 2)
+  isDuplicateInFile         Boolean         @default(false)
+  isDuplicateInMonthBatch   Boolean         @default(false)
+  validationJson            Json?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  batch                     SpgPayrollBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, employeeIdentityNo])
+}
+
+model SpgPayrollStatusHistory {
+  id        Int                   @id @default(autoincrement())
+  batchId   Int
+  oldStatus SpgPayrollBatchStatus?
+  newStatus SpgPayrollBatchStatus
+  changedBy Int?
+  changedAt DateTime              @default(now())
+  reason    String?               @db.Text
+  batch     SpgPayrollBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  changedByUser User?             @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+
+  @@index([batchId, changedAt])
+}
+
+model SpgPayrollReceipt {
+  id        Int             @id @default(autoincrement())
+  batchId   Int             @unique
+  receiptNo String          @unique
+  issuedAt  DateTime        @default(now())
+  pdfUrl    String?
+  batch     SpgPayrollBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 }

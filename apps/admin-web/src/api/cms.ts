@@ -1,5 +1,37 @@
 import { apiRequest } from "./client";
-import type { Category, CategoryInput, Media, MediaMetadataInput, Page, PageInput, Post, PostInput, Role, RoleInput, SettingsPayload, UserDetail, UserInput } from "@/types";
+import type {
+  Category,
+  CategoryInput,
+  CorporatePayerInput,
+  DuplicateCase,
+  IndividualPayerInput,
+  IndividualDirectoryCategory,
+  CorporateDirectoryCategory,
+  CorporateDirectoryRow,
+  IndividualDirectoryRow,
+  Media,
+  MediaMetadataInput,
+  MergeExecuteInput,
+  Page,
+  PageInput,
+  PayerProfile,
+  PayerStatus,
+  PayerType,
+  Post,
+  PostInput,
+  Role,
+  RoleInput,
+  SettingsPayload,
+  SpgEmployee,
+  SpgEmployeeInput,
+  SpgEmployerPayerInput,
+  SpgPayrollBatchDetail,
+  SpgPayrollBatchRow,
+  UserDetail,
+  UserInput,
+  PaymentGatewayConfig,
+  ZakatTypeConfig,
+} from "@/types";
 import type { AdminMenuPrefs } from "@/config/admin-menu";
 
 export async function fetchDashboardSummary() {
@@ -149,4 +181,225 @@ export async function updateRole(id: number, input: RoleInput) {
 
 export async function deleteRole(id: number) {
   return apiRequest<{ data: { success: boolean } }>(`/api/roles/${id}`, { method: "DELETE" });
+}
+
+// Payers
+export async function listPayers(params: {
+  page?: number;
+  limit?: number;
+  q?: string;
+  type?: PayerType;
+  status?: PayerStatus;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.q) qs.set("q", params.q);
+  if (params.type) qs.set("type", params.type);
+  if (params.status) qs.set("status", params.status);
+  return apiRequest<{ data: PayerProfile[]; meta: Record<string, unknown> }>(`/api/payers?${qs.toString()}`);
+}
+
+export async function listIndividualDirectory(params: {
+  page?: number;
+  limit?: number;
+  q?: string;
+  category?: IndividualDirectoryCategory;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.q) qs.set("q", params.q);
+  if (params.category) qs.set("category", params.category);
+  return apiRequest<{ data: IndividualDirectoryRow[]; meta: Record<string, unknown> }>(`/api/payers/individual-directory?${qs.toString()}`);
+}
+
+export async function listCorporateDirectory(params: {
+  page?: number;
+  limit?: number;
+  q?: string;
+  category?: CorporateDirectoryCategory;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.q) qs.set("q", params.q);
+  if (params.category) qs.set("category", params.category);
+  return apiRequest<{ data: CorporateDirectoryRow[]; meta: Record<string, unknown> }>(`/api/payers/corporate-directory?${qs.toString()}`);
+}
+
+export async function getPayer(id: number) {
+  return apiRequest<{ data: PayerProfile }>(`/api/payers/${id}`);
+}
+
+export async function createIndividualPayer(input: IndividualPayerInput) {
+  return apiRequest<{ data: PayerProfile }>("/api/payers/individual", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function createCorporatePayer(input: CorporatePayerInput) {
+  return apiRequest<{ data: PayerProfile }>("/api/payers/corporate", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function createSpgEmployer(input: SpgEmployerPayerInput) {
+  return apiRequest<{ data: PayerProfile }>("/api/payers/spg-employer", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updatePayer(id: number, input: Partial<PayerProfile>) {
+  return apiRequest<{ data: PayerProfile }>(`/api/payers/${id}`, { method: "PUT", body: JSON.stringify(input) });
+}
+
+// SPG
+export async function listSpgEmployees(employerPayerId: number) {
+  return apiRequest<{ data: SpgEmployee[] }>(`/api/spg/employers/${employerPayerId}/employees`);
+}
+
+export async function createSpgEmployee(employerPayerId: number, input: SpgEmployeeInput) {
+  return apiRequest<{ data: { employee: SpgEmployee } }>(`/api/spg/employers/${employerPayerId}/employees`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function importSpgEmployees(employerPayerId: number, employees: SpgEmployeeInput[]) {
+  return apiRequest<{ data: { imported: number; duplicateCases: number; rows: SpgEmployee[] } }>(
+    `/api/spg/employers/${employerPayerId}/employees/import`,
+    { method: "POST", body: JSON.stringify({ employees }) },
+  );
+}
+
+export async function updateSpgEmployee(id: number, input: Partial<SpgEmployeeInput>) {
+  return apiRequest<{ data: SpgEmployee }>(`/api/spg/employees/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listPendingSpgPayrollBatches() {
+  return apiRequest<{ data: SpgPayrollBatchRow[] }>("/api/spg/admin/pending-batches");
+}
+
+export async function getSpgPayrollBatchDetail(batchId: number) {
+  return apiRequest<{ data: SpgPayrollBatchDetail }>(`/api/spg/batches/${batchId}`);
+}
+
+export async function approveSpgPayrollBatch(batchId: number, reason?: string) {
+  return apiRequest<{ data: { batchId: number; status: string; officialReceiptNo?: string | null } }>(
+    `/api/spg/admin/batches/${batchId}/approve`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+  );
+}
+
+export async function rejectSpgPayrollBatch(batchId: number, reason?: string) {
+  return apiRequest<{ data: { batchId: number; status: string } }>(
+    `/api/spg/admin/batches/${batchId}/reject`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+  );
+}
+
+// Duplicates + merges
+export async function listDuplicateCases(status?: string) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest<{ data: DuplicateCase[]; meta: Record<string, unknown> }>(`/api/duplicates/cases${qs}`);
+}
+
+export async function getDuplicateCase(id: number) {
+  return apiRequest<{ data: DuplicateCase }>(`/api/duplicates/cases/${id}`);
+}
+
+export async function detectDuplicateForEmployee(employeeId: number) {
+  return apiRequest<{ data: { detected: boolean; message?: string; case?: DuplicateCase } }>(
+    `/api/duplicates/detect/spg-employee/${employeeId}`,
+    { method: "POST" },
+  );
+}
+
+export async function rejectDuplicateCase(id: number, notes?: string) {
+  return apiRequest<{ data: DuplicateCase }>(`/api/duplicates/cases/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ notes }),
+  });
+}
+
+export async function executeMerge(input: MergeExecuteInput) {
+  return apiRequest<{ data: { id: number } }>("/api/merges/execute", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// Status + audit
+export async function changePayerStatus(payerId: number, status: PayerStatus, reason?: string) {
+  return apiRequest<{ data: PayerProfile }>(`/api/status/${payerId}/change`, {
+    method: "POST",
+    body: JSON.stringify({ status, reason }),
+  });
+}
+
+export async function addToBlacklist(payerId: number, input: { reason?: string; fromDate?: string; toDate?: string }) {
+  return apiRequest<{ data: PayerProfile }>(`/api/status/${payerId}/blacklist`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function removeFromBlacklist(payerId: number) {
+  return apiRequest<{ data: PayerProfile }>(`/api/status/${payerId}/blacklist`, { method: "DELETE" });
+}
+
+export async function getPayerHistory(payerId: number) {
+  return apiRequest<{ data: { statusHistory: unknown[]; blacklistHistory: unknown[] } }>(`/api/status/${payerId}/history`);
+}
+
+export async function getPayerAudit(payerId: number) {
+  return apiRequest<{ data: unknown[] }>(`/api/audit/profile/${payerId}`);
+}
+
+export async function getPayerStats(payerId: number) {
+  return apiRequest<{
+    data: {
+      totalPaid: number;
+      individualTotal: number;
+      corporateTotal: number;
+      transactionCount: number;
+      monthlyBreakdown: Array<{ month: string; individual: number; corporate: number }>;
+      zakatTypes: Array<{ type: string; amount: number }>;
+      recentTransactions: Array<{
+        id: number;
+        date: string;
+        amount: number;
+        source: string;
+        zakatType: string;
+        status: string;
+      }>;
+    };
+  }>(`/api/payers/${payerId}/stats`);
+}
+
+// Zakat Configuration
+export async function getZakatTypes() {
+  return apiRequest<{ data: { types: ZakatTypeConfig[] } }>("/api/settings/zakat-types");
+}
+
+export async function saveZakatTypes(types: ZakatTypeConfig[]) {
+  return apiRequest<{ data: { types: ZakatTypeConfig[] } }>("/api/settings/zakat-types", {
+    method: "PUT",
+    body: JSON.stringify({ types }),
+  });
+}
+
+export async function getPaymentGateways() {
+  return apiRequest<{ data: { gateways: PaymentGatewayConfig[] } }>("/api/settings/payment-gateways");
+}
+
+export async function savePaymentGateways(gateways: PaymentGatewayConfig[]) {
+  return apiRequest<{ data: { gateways: PaymentGatewayConfig[] } }>("/api/settings/payment-gateways", {
+    method: "PUT",
+    body: JSON.stringify({ gateways }),
+  });
 }

@@ -4,11 +4,17 @@ import path from "node:path";
 dotenv.config();
 
 const rootDir = process.cwd();
+const configuredCorsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5174")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const defaultPortalOrigins = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"];
+const corsOrigins = Array.from(new Set([...configuredCorsOrigins, ...defaultPortalOrigins]));
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  corsOrigins,
   sessionSecret: process.env.SESSION_SECRET ?? "change-me",
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS ?? 24),
   cookieName: process.env.COOKIE_NAME ?? "cms_session",

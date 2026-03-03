@@ -1,6 +1,7 @@
 import type { Component } from "vue";
 import {
   Braces,
+  Users,
   Database,
   FileText,
   Gauge,
@@ -45,10 +46,54 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     ],
   },
   {
+    id: "profil-pembayar",
+    label: "Profil Pembayar",
+    items: [
+      {
+        id: "pembayar-individu",
+        label: "Individu",
+        to: "/payers/individual/list",
+        icon: Users,
+        children: [
+          { label: "Senarai", to: "/payers/individual/list" },
+          { label: "Daftar Baru", to: "/payers/individual/new" },
+        ],
+      },
+      {
+        id: "pembayar-korporat",
+        label: "Korporat/Syarikat",
+        to: "/payers/corporate/list",
+        icon: Users,
+        children: [
+          { label: "Senarai", to: "/payers/corporate/list" },
+          { label: "Daftar Baru", to: "/payers/corporate/new" },
+        ],
+      },
+      {
+        id: "pembayar-spg",
+        label: "Skim Potongan Gaji(SPG)",
+        to: "/payers/spg/list",
+        icon: Users,
+        children: [
+          { label: "Senarai", to: "/payers/spg/list" },
+          { label: "Daftar Baru", to: "/payers/spg/new" },
+          { label: "Semakan Bayaran", to: "/spg/payments/pending" },
+        ],
+      },
+    ],
+  },
+  {
     id: "portal",
     label: "Portal",
     items: [
       { id: "dashboard", label: "Portal Dashboard", to: "/portal/dashboard", icon: Gauge },
+      {
+        id: "duplicates",
+        label: "Duplicate Cases",
+        to: "/duplicates",
+        icon: Users,
+        children: [{ label: "Case List", to: "/duplicates" }],
+      },
       {
         id: "posts",
         label: "Posts",
@@ -95,6 +140,24 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
           { label: "Roles", to: "/settings/roles" },
           { label: "System", to: "/settings/system" },
         ],
+      },
+    ],
+  },
+  {
+    id: "zakat-configuration",
+    label: "Konfigurasi Zakat",
+    items: [
+      {
+        id: "zakat-types",
+        label: "Jenis Zakat",
+        to: "/zakat-config/types",
+        icon: FileText,
+      },
+      {
+        id: "zakat-payment-gateways",
+        label: "Gerbang Pembayaran",
+        to: "/zakat-config/payment-gateways",
+        icon: Settings,
       },
     ],
   },

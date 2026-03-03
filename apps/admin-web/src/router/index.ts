@@ -21,6 +21,22 @@ import SettingsView from "@/views/SettingsView.vue";
 import SystemInfoView from "@/views/SystemInfoView.vue";
 import UsersView from "@/views/UsersView.vue";
 import UserEditView from "@/views/UserEditView.vue";
+import PayersListView from "@/views/PayersListView.vue";
+import PayerDetailView from "@/views/PayerDetailView.vue";
+import PayerIndividualRegistrationView from "@/views/PayerIndividualRegistrationView.vue";
+import PayerCorporateRegistrationView from "@/views/PayerCorporateRegistrationView.vue";
+import SpgEmployerRegistrationView from "@/views/SpgEmployerRegistrationView.vue";
+import PayerIndividualListView from "@/views/PayerIndividualListView.vue";
+import PayerCorporateListView from "@/views/PayerCorporateListView.vue";
+import PayerSpgListView from "@/views/PayerSpgListView.vue";
+import SpgEmployeesView from "@/views/SpgEmployeesView.vue";
+import DuplicateCasesView from "@/views/DuplicateCasesView.vue";
+import DuplicateCaseDetailView from "@/views/DuplicateCaseDetailView.vue";
+import ZakatTypesView from "@/views/ZakatTypesView.vue";
+import PaymentGatewaysView from "@/views/PaymentGatewaysView.vue";
+import ZakatTypeEditorView from "@/views/ZakatTypeEditorView.vue";
+import SpgPendingBatchesView from "@/views/SpgPendingBatchesView.vue";
+import SpgPendingBatchDetailView from "@/views/SpgPendingBatchDetailView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 
@@ -40,6 +56,22 @@ const router = createRouter({
     { path: "/pages/new", name: "page-create", component: PageEditorView, meta: { requiresAuth: true, title: "New Page" } },
     { path: "/pages/:id", name: "page-edit", component: PageEditorView, meta: { requiresAuth: true, title: "Edit Page" } },
     { path: "/media", name: "media", component: MediaLibraryView, meta: { requiresAuth: true, title: "Media" } },
+    { path: "/payers", name: "payers", component: PayersListView, meta: { requiresAuth: true, title: "Payers" } },
+    { path: "/payers/individual/list", name: "payer-individual-list", component: PayerIndividualListView, meta: { requiresAuth: true, title: "Individu - Senarai" } },
+    { path: "/payers/individual/new", name: "payer-individual-create", component: PayerIndividualRegistrationView, meta: { requiresAuth: true, title: "Daftar Individu" } },
+    { path: "/payers/corporate/list", name: "payer-corporate-list", component: PayerCorporateListView, meta: { requiresAuth: true, title: "Korporat - Senarai" } },
+    { path: "/payers/corporate/new", name: "payer-corporate-create", component: PayerCorporateRegistrationView, meta: { requiresAuth: true, title: "Daftar Korporat" } },
+    { path: "/payers/spg/list", name: "payer-spg-list", component: PayerSpgListView, meta: { requiresAuth: true, title: "SPG - Senarai" } },
+    { path: "/payers/spg/new", name: "payer-spg-create", component: SpgEmployerRegistrationView, meta: { requiresAuth: true, title: "Daftar SPG" } },
+    { path: "/payers/:id", name: "payer-detail", component: PayerDetailView, meta: { requiresAuth: true, title: "Profil Pembayar" } },
+    { path: "/spg/employers/:payerId/employees", name: "spg-employees", component: SpgEmployeesView, meta: { requiresAuth: true, title: "SPG Employees" } },
+    { path: "/spg/payments/pending", name: "spg-payments-pending", component: SpgPendingBatchesView, meta: { requiresAuth: true, title: "SPG Pending Payment" } },
+    { path: "/spg/payments/:batchId", name: "spg-payments-detail", component: SpgPendingBatchDetailView, meta: { requiresAuth: true, title: "SPG Batch Detail" } },
+    { path: "/duplicates", name: "duplicates", component: DuplicateCasesView, meta: { requiresAuth: true, title: "Duplicate Cases" } },
+    { path: "/duplicates/:id", name: "duplicate-detail", component: DuplicateCaseDetailView, meta: { requiresAuth: true, title: "Duplicate Case Detail" } },
+    { path: "/zakat-config/types", name: "zakat-types", component: ZakatTypesView, meta: { requiresAuth: true, title: "Jenis Zakat" } },
+    { path: "/zakat-config/types/:code", name: "zakat-types-edit", component: ZakatTypeEditorView, meta: { requiresAuth: true, title: "Edit Jenis Zakat" } },
+    { path: "/zakat-config/payment-gateways", name: "zakat-payment-gateways", component: PaymentGatewaysView, meta: { requiresAuth: true, title: "Gerbang Pembayaran" } },
     { path: "/menus", name: "menus", component: MenusView, meta: { requiresAuth: true, title: "Menus" } },
     { path: "/kitchen-sink", name: "kitchen-sink", component: KitchenSinkView, meta: { requiresAuth: true, title: "Kitchen Sink" } },
     { path: "/kitchen-sink/forms", name: "kitchen-forms", component: KitchenFormsView, meta: { requiresAuth: true, title: "Forms" } },

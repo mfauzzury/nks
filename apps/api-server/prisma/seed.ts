@@ -223,10 +223,515 @@ async function main() {
     },
   });
 
+  const muslimNames = [
+    "Muhammad Amir Hakim",
+    "Ahmad Firdaus",
+    "Mohd Syafiq",
+    "Nur Aisyah",
+    "Siti Nurul Huda",
+    "Noraini Binti Ismail",
+    "Abdul Rahman",
+    "Khairul Anuar",
+    "Norshuhada",
+    "Hafizah Binti Hamzah",
+    "Muhammad Danish",
+    "Nur Izzati",
+    "Aiman Hakimi",
+    "Ainul Mardhiah",
+    "Wan Muhammad Faiz",
+    "Ummu Hani",
+    "Fatin Nabila",
+    "Faris Imran",
+    "Sofea Natasha",
+    "Zulkifli Ahmad",
+  ];
+
+  const malaysianStates = [
+    "Selangor",
+    "Kuala Lumpur",
+    "Johor",
+    "Pulau Pinang",
+    "Perak",
+    "Kedah",
+    "Negeri Sembilan",
+    "Melaka",
+    "Terengganu",
+    "Kelantan",
+  ];
+
+  const corporateCompanies = [
+    "Amanah Teknologi Sdn Bhd",
+    "Barakah Logistics Sdn Bhd",
+    "Hijrah Global Services Sdn Bhd",
+    "Nur Solutions Sdn Bhd",
+    "Rizq Manufacturing Sdn Bhd",
+    "Ukhwah Digital Sdn Bhd",
+    "Ilham Retail Sdn Bhd",
+    "Maju Muslim Food Industries Sdn Bhd",
+    "Cahaya Harmoni Holdings Sdn Bhd",
+    "Wawasan Integriti Sdn Bhd",
+  ];
+
+  const payerSpgCompanies = [
+    "Arif Dinamik Sdn Bhd",
+    "Budi Jaya Resources Sdn Bhd",
+    "Cekap Niaga Holdings Sdn Bhd",
+    "Damai Murni Ventures Sdn Bhd",
+    "Ehsan Prima Network Sdn Bhd",
+    "Falah Karya Solution Sdn Bhd",
+    "Gemilang Usaha Integrasi Sdn Bhd",
+    "Harmoni Bestari Services Sdn Bhd",
+    "Ikhlas Maju Retail Sdn Bhd",
+    "Jernih Global Logistic Sdn Bhd",
+  ];
+
+  const payerOnlyCompanies = [
+    "Karya Aman Maju Sdn Bhd",
+    "Lestari Barakah Trading Sdn Bhd",
+    "Mutiara Ihsan Services Sdn Bhd",
+    "Nadi Integriti Tech Sdn Bhd",
+    "Optima Hikmah Holdings Sdn Bhd",
+  ];
+
+  const spgOnlyCompanies = [
+    "Pintar Ukhwah Resources Sdn Bhd",
+    "Qudwah Dinamik Logistics Sdn Bhd",
+    "Rahmah Sinergi Venture Sdn Bhd",
+    "Sinar Falah Services Sdn Bhd",
+    "Teras Ehsan Global Sdn Bhd",
+  ];
+
+  function icNo(seed: number) {
+    return `90010${(seed % 9) + 1}${String((seed % 28) + 1).padStart(2, "0")}10${String(1000 + seed)}`;
+  }
+
+  function ssmNo(seed: number) {
+    return `20${String(1200000 + seed)}`;
+  }
+
+  // Seed 20 Malaysian Muslim individual payers (registered)
+  for (let i = 0; i < 20; i += 1) {
+    const fullName = muslimNames[i];
+    const identity = icNo(i + 1);
+    const email = `individu${i + 1}@contoh.my`;
+    const phone = `012300${String(100 + i)}`;
+
+    const existingIndividual = await prisma.payerIndividual.findUnique({
+      where: { mykadOrPassport: identity },
+      include: { payer: true },
+    });
+
+    if (!existingIndividual) {
+      await prisma.payerProfile.create({
+        data: {
+          payerCode: `PYR-IND-${String(i + 1).padStart(3, "0")}`,
+          payerType: "individu",
+          displayName: fullName,
+          identityNo: identity,
+          identityType: "mykad",
+          email,
+          phone,
+          status: "active",
+          individual: {
+            create: {
+              fullName,
+              mykadOrPassport: identity,
+              occupation: "Pekerja Swasta",
+              incomeSource: "Gaji",
+              monthlyIncome: 3500 + i * 120,
+            },
+          },
+          addresses: {
+            create: {
+              addressType: "rumah",
+              line1: `No ${i + 10}, Jalan Sejahtera`,
+              city: "Shah Alam",
+              state: malaysianStates[i % malaysianStates.length],
+              postcode: `40${String(100 + i).slice(-3)}`,
+              country: "Malaysia",
+              isPrimary: true,
+            },
+          },
+        },
+      });
+    }
+  }
+
+  // Seed guest contributions for existing registered individuals
+  const seedZakatTypes = ["ZAKAT PENDAPATAN", "ZAKAT SIMPANAN", "ZAKAT PERNIAGAAN", "ZAKAT EMAS", "ZAKAT FITRAH", "ZAKAT SAHAM", "ZAKAT KWSP", "ZAKAT KRIPTO"];
+  const seedPayMethods = ["FPX", "CARD", "JOMPAY"];
+
+  for (let i = 0; i < 20; i += 1) {
+    const identity = icNo(i + 1);
+    const existingGuest = await prisma.guestPayment.findFirst({
+      where: {
+        identityNo: identity,
+        status: "success",
+      },
+    });
+    if (existingGuest) continue;
+
+    const zakatType = seedZakatTypes[i % seedZakatTypes.length];
+    const payMethod = seedPayMethods[i % seedPayMethods.length];
+
+    await prisma.guestPayment.create({
+      data: {
+        receiptNo: `GRCPT-SEED-REG-${String(i + 1).padStart(3, "0")}`,
+        guestName: muslimNames[i],
+        identityNo: identity,
+        email: `individu${i + 1}@contoh.my`,
+        amount: 50 + i * 5,
+        paymentMethod: `${payMethod} | ${zakatType}`,
+        status: "success",
+      },
+    });
+  }
+
+  // Seed 20 direct-pay contributors without registered account
+  for (let i = 0; i < 20; i += 1) {
+    const identity = icNo(900 + i);
+    const existingGuest = await prisma.guestPayment.findFirst({
+      where: {
+        identityNo: identity,
+        status: "success",
+      },
+    });
+    if (existingGuest) continue;
+
+    const zakatType = seedZakatTypes[(i + 3) % seedZakatTypes.length];
+    const payMethod = seedPayMethods[(i + 1) % seedPayMethods.length];
+
+    await prisma.guestPayment.create({
+      data: {
+        receiptNo: `GRCPT-SEED-GUEST-${String(i + 1).padStart(3, "0")}`,
+        guestName: `${muslimNames[i]} Bin Abdullah`,
+        identityNo: identity,
+        email: `tetamu${i + 1}@contoh.my`,
+        amount: 30 + i * 3,
+        paymentMethod: `${payMethod} | ${zakatType}`,
+        status: "success",
+      },
+    });
+  }
+
+  // Seed 10 corporate payers and 10 staff each (100 staff total)
+  for (let i = 0; i < 10; i += 1) {
+    const companyName = corporateCompanies[i];
+    const regNo = ssmNo(i + 1);
+    const companyEmail = `korporat${i + 1}@contoh.my`;
+    const companyPhone = `03${String(22000000 + i * 37)}`;
+
+    let payerId: number;
+    const existingCorporate = await prisma.payerCorporate.findUnique({
+      where: { ssmNo: regNo },
+      include: { payer: true },
+    });
+
+    if (existingCorporate) {
+      payerId = existingCorporate.payerId;
+    } else {
+      const created = await prisma.payerProfile.create({
+        data: {
+          payerCode: `PYR-CORP-${String(i + 1).padStart(3, "0")}`,
+          payerType: "korporat",
+          displayName: companyName,
+          identityNo: regNo,
+          identityType: "ssm",
+          email: companyEmail,
+          phone: companyPhone,
+          status: "active",
+          corporate: {
+            create: {
+              companyName,
+              ssmNo: regNo,
+              companyType: "Sdn Bhd",
+              taxNo: `C${10000000 + i}`,
+              taxBranch: "LHDN Shah Alam",
+            },
+          },
+          addresses: {
+            create: {
+              addressType: "pejabat",
+              line1: `Lot ${20 + i}, Persiaran Niaga`,
+              city: "Petaling Jaya",
+              state: malaysianStates[i % malaysianStates.length],
+              postcode: `47${String(100 + i).slice(-3)}`,
+              country: "Malaysia",
+              isPrimary: true,
+            },
+          },
+          contactPersons: {
+            create: {
+              name: muslimNames[(i + 10) % muslimNames.length],
+              icNo: icNo(200 + i),
+              position: "Pengurus HR",
+              email: `wakil${i + 1}@contoh.my`,
+              phone: `013700${String(100 + i)}`,
+              isAuthorized: true,
+            },
+          },
+        },
+      });
+      payerId = created.id;
+    }
+
+    for (let j = 0; j < 10; j += 1) {
+      const staffIdentity = icNo(500 + i * 10 + j);
+      const existingStaff = await prisma.spgEmployee.findFirst({
+        where: {
+          employerPayerId: payerId,
+          employeeIdentityNo: staffIdentity,
+        },
+      });
+      if (existingStaff) continue;
+
+      await prisma.spgEmployee.create({
+        data: {
+          employerPayerId: payerId,
+          employeeIdentityNo: staffIdentity,
+          employeeName: muslimNames[(i + j) % muslimNames.length],
+          employeeEmail: `staff${i + 1}${j + 1}@contoh.my`,
+          employeePhone: `014800${String(100 + i * 10 + j)}`,
+          deductionAmount: 120 + j * 5,
+          employmentStatus: "AKTIF",
+        },
+      });
+    }
+  }
+
+  // Seed 10 companies categorized as Payer & SPG
+  for (let i = 0; i < 10; i += 1) {
+    const companyName = payerSpgCompanies[i];
+    const regNo = ssmNo(100 + i);
+    const companyEmail = `payer-spg-${i + 1}@contoh.my`;
+
+    let corporatePayerId: number;
+    const existingCorporate = await prisma.payerCorporate.findUnique({
+      where: { ssmNo: regNo },
+      include: { payer: true },
+    });
+
+    if (existingCorporate) {
+      corporatePayerId = existingCorporate.payerId;
+    } else {
+      const createdCorporate = await prisma.payerProfile.create({
+        data: {
+          payerCode: `PYR-CORP-BOTH-${String(i + 1).padStart(3, "0")}`,
+          payerType: "korporat",
+          displayName: companyName,
+          identityNo: regNo,
+          identityType: "ssm",
+          email: companyEmail,
+          phone: `03${String(33000000 + i * 41)}`,
+          status: "active",
+          corporate: {
+            create: {
+              companyName,
+              ssmNo: regNo,
+              companyType: "Sdn Bhd",
+              taxNo: `CB${2000000 + i}`,
+              taxBranch: "LHDN Kuala Lumpur",
+            },
+          },
+        },
+      });
+      corporatePayerId = createdCorporate.id;
+    }
+
+    const existingSpg = await prisma.payerProfile.findFirst({
+      where: {
+        payerType: "majikan_spg",
+        identityNo: regNo,
+      },
+      include: {
+        spgEmployer: true,
+      },
+    });
+
+    let spgPayerId: number;
+    if (existingSpg) {
+      spgPayerId = existingSpg.id;
+      if (!existingSpg.spgEmployer) {
+        await prisma.spgEmployer.create({
+          data: {
+            payerId: spgPayerId,
+            agreementNo: `SPG-BOTH-${String(i + 1).padStart(3, "0")}`,
+            agreementEffectiveDate: new Date("2025-01-01"),
+            deductionMode: "fixed",
+            deductionValue: 120 + i * 10,
+            deductionCap: 500,
+          },
+        });
+      }
+    } else {
+      const createdSpg = await prisma.payerProfile.create({
+        data: {
+          payerCode: `PYR-SPG-BOTH-${String(i + 1).padStart(3, "0")}`,
+          payerType: "majikan_spg",
+          displayName: companyName,
+          identityNo: regNo,
+          identityType: "other",
+          email: companyEmail,
+          phone: `03${String(43000000 + i * 29)}`,
+          status: "active",
+          spgEmployer: {
+            create: {
+              agreementNo: `SPG-BOTH-${String(i + 1).padStart(3, "0")}`,
+              agreementEffectiveDate: new Date("2025-01-01"),
+              deductionMode: "fixed",
+              deductionValue: 120 + i * 10,
+              deductionCap: 500,
+            },
+          },
+        },
+      });
+      spgPayerId = createdSpg.id;
+    }
+
+    for (let j = 0; j < 3; j += 1) {
+      const staffIdentity = icNo(1200 + i * 10 + j);
+      const existingStaff = await prisma.spgEmployee.findFirst({
+        where: {
+          employerPayerId: spgPayerId,
+          employeeIdentityNo: staffIdentity,
+        },
+      });
+      if (existingStaff) continue;
+
+      await prisma.spgEmployee.create({
+        data: {
+          employerPayerId: spgPayerId,
+          employeeIdentityNo: staffIdentity,
+          employeeName: muslimNames[(i + j + 3) % muslimNames.length],
+          employeeEmail: `bothstaff${i + 1}${j + 1}@contoh.my`,
+          employeePhone: `015900${String(100 + i * 10 + j)}`,
+          deductionAmount: 100 + j * 10,
+          employmentStatus: "AKTIF",
+        },
+      });
+    }
+
+    // Link one employee to registered individual occasionally to enrich mixed dataset.
+    if (i % 3 === 0) {
+      const linkedIdentity = icNo(i + 1);
+      const linkedIndividual = await prisma.payerIndividual.findUnique({
+        where: { mykadOrPassport: linkedIdentity },
+      });
+      const firstStaff = await prisma.spgEmployee.findFirst({
+        where: { employerPayerId: spgPayerId },
+        orderBy: { id: "asc" },
+      });
+      if (linkedIndividual && firstStaff && !firstStaff.linkedIndividualPayerId) {
+        await prisma.spgEmployee.update({
+          where: { id: firstStaff.id },
+          data: { linkedIndividualPayerId: linkedIndividual.payerId },
+        });
+      }
+    }
+  }
+
+  // Seed 5 companies as Payer only
+  for (let i = 0; i < 5; i += 1) {
+    const companyName = payerOnlyCompanies[i];
+    const regNo = ssmNo(200 + i);
+    const existingCorporate = await prisma.payerCorporate.findUnique({
+      where: { ssmNo: regNo },
+      include: { payer: true },
+    });
+    if (existingCorporate) continue;
+
+    await prisma.payerProfile.create({
+      data: {
+        payerCode: `PYR-CORP-ONLY-${String(i + 1).padStart(3, "0")}`,
+        payerType: "korporat",
+        displayName: companyName,
+        identityNo: regNo,
+        identityType: "ssm",
+        email: `payer-only-${i + 1}@contoh.my`,
+        phone: `03${String(53000000 + i * 17)}`,
+        status: "active",
+        corporate: {
+          create: {
+            companyName,
+            ssmNo: regNo,
+            companyType: "Sdn Bhd",
+            taxNo: `PO${3000000 + i}`,
+            taxBranch: "LHDN Putrajaya",
+          },
+        },
+      },
+    });
+  }
+
+  // Seed 5 companies as SPG only
+  for (let i = 0; i < 5; i += 1) {
+    const companyName = spgOnlyCompanies[i];
+    const regNo = ssmNo(300 + i);
+
+    const existingSpg = await prisma.payerProfile.findFirst({
+      where: {
+        payerType: "majikan_spg",
+        identityNo: regNo,
+      },
+    });
+
+    let spgPayerId: number;
+    if (existingSpg) {
+      spgPayerId = existingSpg.id;
+    } else {
+      const createdSpg = await prisma.payerProfile.create({
+        data: {
+          payerCode: `PYR-SPG-ONLY-${String(i + 1).padStart(3, "0")}`,
+          payerType: "majikan_spg",
+          displayName: companyName,
+          identityNo: regNo,
+          identityType: "other",
+          email: `spg-only-${i + 1}@contoh.my`,
+          phone: `03${String(63000000 + i * 11)}`,
+          status: "active",
+          spgEmployer: {
+            create: {
+              agreementNo: `SPG-ONLY-${String(i + 1).padStart(3, "0")}`,
+              agreementEffectiveDate: new Date("2025-01-01"),
+              deductionMode: "fixed",
+              deductionValue: 100 + i * 5,
+              deductionCap: 400,
+            },
+          },
+        },
+      });
+      spgPayerId = createdSpg.id;
+    }
+
+    for (let j = 0; j < 3; j += 1) {
+      const staffIdentity = icNo(1500 + i * 10 + j);
+      const existingStaff = await prisma.spgEmployee.findFirst({
+        where: {
+          employerPayerId: spgPayerId,
+          employeeIdentityNo: staffIdentity,
+        },
+      });
+      if (existingStaff) continue;
+
+      await prisma.spgEmployee.create({
+        data: {
+          employerPayerId: spgPayerId,
+          employeeIdentityNo: staffIdentity,
+          employeeName: muslimNames[(i + j + 7) % muslimNames.length],
+          employeeEmail: `spgonlystaff${i + 1}${j + 1}@contoh.my`,
+          employeePhone: `016700${String(100 + i * 10 + j)}`,
+          deductionAmount: 90 + j * 10,
+          employmentStatus: "AKTIF",
+        },
+      });
+    }
+  }
+
   console.log(`Seeded admin user: ${adminEmail}`);
   console.log(`Seeded ${samplePosts.length} sample posts`);
   console.log(`Seeded ${sampleCategories.length} categories`);
   console.log("Seeded default admin role");
+  console.log("Seeded Module 1 sample data: 20 individu berdaftar, 20 tetamu direct pay, 10 korporat, 100 staff, 10 syarikat Payer & SPG, 5 Payer sahaja, 5 SPG sahaja");
 }
 
 main()

@@ -1,78 +1,129 @@
-PRAGMA foreign_keys=ON;
+CREATE DATABASE IF NOT EXISTS `corrad_xpress` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `corrad_xpress`;
 
-CREATE TABLE IF NOT EXISTS "User" (
-  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  "email" TEXT NOT NULL UNIQUE,
-  "passwordHash" TEXT NOT NULL,
-  "name" TEXT NOT NULL,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS `User` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `email` VARCHAR(191) NOT NULL UNIQUE,
+  `passwordHash` VARCHAR(191) NOT NULL,
+  `name` VARCHAR(191) NOT NULL,
+  `photoUrl` VARCHAR(191),
+  `role` VARCHAR(191) NOT NULL DEFAULT 'admin',
+  `isActive` BOOLEAN NOT NULL DEFAULT true,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS "Session" (
-  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  "userId" INTEGER NOT NULL,
-  "tokenHash" TEXT NOT NULL UNIQUE,
-  "expiresAt" DATETIME NOT NULL,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
+CREATE TABLE IF NOT EXISTS `Role` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(191) NOT NULL UNIQUE,
+  `description` VARCHAR(191) NOT NULL DEFAULT '',
+  `permissions` TEXT NOT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX IF NOT EXISTS "Session_userId_idx" ON "Session"("userId");
-CREATE INDEX IF NOT EXISTS "Session_expiresAt_idx" ON "Session"("expiresAt");
+CREATE TABLE IF NOT EXISTS `Session` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `userId` INT NOT NULL,
+  `tokenHash` VARCHAR(191) NOT NULL UNIQUE,
+  `expiresAt` DATETIME(3) NOT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX `Session_userId_idx` (`userId`),
+  INDEX `Session_expiresAt_idx` (`expiresAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS "Media" (
-  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  "filename" TEXT NOT NULL,
-  "originalName" TEXT NOT NULL,
-  "title" TEXT,
-  "caption" TEXT,
-  "description" TEXT,
-  "mimeType" TEXT NOT NULL,
-  "size" INTEGER NOT NULL,
-  "width" INTEGER,
-  "height" INTEGER,
-  "altText" TEXT,
-  "path" TEXT NOT NULL,
-  "url" TEXT NOT NULL,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS `Media` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `filename` VARCHAR(191) NOT NULL,
+  `originalName` VARCHAR(191) NOT NULL,
+  `title` VARCHAR(191),
+  `caption` TEXT,
+  `description` TEXT,
+  `mimeType` VARCHAR(191) NOT NULL,
+  `size` INT NOT NULL,
+  `width` INT,
+  `height` INT,
+  `altText` VARCHAR(191),
+  `path` VARCHAR(191) NOT NULL,
+  `url` VARCHAR(191) NOT NULL,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX `Media_createdAt_idx` (`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX IF NOT EXISTS "Media_createdAt_idx" ON "Media"("createdAt");
+CREATE TABLE IF NOT EXISTS `Post` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(191) NOT NULL,
+  `slug` VARCHAR(191) NOT NULL UNIQUE,
+  `excerpt` TEXT,
+  `content` LONGTEXT NOT NULL,
+  `status` ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'draft',
+  `featuredImageId` INT,
+  `publishedAt` DATETIME(3),
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  FOREIGN KEY (`featuredImageId`) REFERENCES `Media`(`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `Post_status_idx` (`status`),
+  INDEX `Post_createdAt_idx` (`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS "Post" (
-  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  "title" TEXT NOT NULL,
-  "slug" TEXT NOT NULL UNIQUE,
-  "excerpt" TEXT,
-  "content" TEXT NOT NULL,
-  "status" TEXT NOT NULL DEFAULT 'draft' CHECK ("status" IN ('draft', 'published', 'archived')),
-  "featuredImageId" INTEGER,
-  "publishedAt" DATETIME,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY ("featuredImageId") REFERENCES "Media"("id") ON DELETE SET NULL ON UPDATE CASCADE
-);
+CREATE TABLE IF NOT EXISTS `Category` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(191) NOT NULL,
+  `slug` VARCHAR(191) NOT NULL UNIQUE,
+  `description` TEXT,
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  INDEX `Category_createdAt_idx` (`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX IF NOT EXISTS "Post_status_idx" ON "Post"("status");
-CREATE INDEX IF NOT EXISTS "Post_createdAt_idx" ON "Post"("createdAt");
+CREATE TABLE IF NOT EXISTS `Page` (
+  `id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(191) NOT NULL,
+  `slug` VARCHAR(191) NOT NULL UNIQUE,
+  `content` LONGTEXT NOT NULL,
+  `status` ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'draft',
+  `featuredImageId` INT,
+  `publishedAt` DATETIME(3),
+  `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  FOREIGN KEY (`featuredImageId`) REFERENCES `Media`(`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `Page_status_idx` (`status`),
+  INDEX `Page_createdAt_idx` (`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS "Page" (
-  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-  "title" TEXT NOT NULL,
-  "slug" TEXT NOT NULL UNIQUE,
-  "content" TEXT NOT NULL,
-  "status" TEXT NOT NULL DEFAULT 'draft' CHECK ("status" IN ('draft', 'published', 'archived')),
-  "publishedAt" DATETIME,
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS `Setting` (
+  `key` VARCHAR(191) NOT NULL PRIMARY KEY,
+  `value` TEXT NOT NULL,
+  `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX IF NOT EXISTS "Page_status_idx" ON "Page"("status");
-CREATE INDEX IF NOT EXISTS "Page_createdAt_idx" ON "Page"("createdAt");
+-- Junction table for Post <-> Category many-to-many
+CREATE TABLE IF NOT EXISTS `_CategoryToPost` (
+  `A` INT NOT NULL,
+  `B` INT NOT NULL,
+  UNIQUE INDEX `_CategoryToPost_AB_unique` (`A`, `B`),
+  INDEX `_CategoryToPost_B_index` (`B`),
+  FOREIGN KEY (`A`) REFERENCES `Category`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (`B`) REFERENCES `Post`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS "Setting" (
-  "key" TEXT NOT NULL PRIMARY KEY,
-  "value" TEXT NOT NULL,
-  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- Junction table for Media <-> Page many-to-many
+CREATE TABLE IF NOT EXISTS `_MediaToPage` (
+  `A` INT NOT NULL,
+  `B` INT NOT NULL,
+  UNIQUE INDEX `_MediaToPage_AB_unique` (`A`, `B`),
+  INDEX `_MediaToPage_B_index` (`B`),
+  FOREIGN KEY (`A`) REFERENCES `Media`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (`B`) REFERENCES `Page`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Junction table for Media <-> Post many-to-many
+CREATE TABLE IF NOT EXISTS `_MediaToPost` (
+  `A` INT NOT NULL,
+  `B` INT NOT NULL,
+  UNIQUE INDEX `_MediaToPost_AB_unique` (`A`, `B`),
+  INDEX `_MediaToPost_B_index` (`B`),
+  FOREIGN KEY (`A`) REFERENCES `Media`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (`B`) REFERENCES `Post`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
