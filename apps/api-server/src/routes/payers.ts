@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { PayerType } from "@prisma/client";
+import { GuestPaymentSource, PayerType } from "@prisma/client";
 import { Router } from "express";
 
 import { prisma } from "../prisma.js";
@@ -756,6 +756,7 @@ payersRouter.post("/corporate-zakat", async (req, res) => {
       amount: input.amount,
       paymentMethod: paymentMethodFull,
       status: "success",
+      source: GuestPaymentSource.CORPORATE_DIRECT,
     },
   });
 

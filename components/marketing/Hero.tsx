@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, CreditCard, LogIn } from "lucide-react";
+import { PortalEntryButton } from "@/components/storefront/PortalEntryButton";
 
 export function Hero() {
   return (
@@ -17,13 +18,9 @@ export function Hero() {
             mesra pengguna.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href="/portal/login"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#1f4ed8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1a42ba]"
-            >
+            <PortalEntryButton className="inline-flex items-center gap-2 rounded-xl bg-[#1f4ed8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1a42ba]">
               <LogIn className="h-4 w-4" />
-              Log Masuk
-            </Link>
+            </PortalEntryButton>
             <Link
               href="/payer/individual/pay"
               className="inline-flex items-center gap-2 rounded-xl border border-[#1f4ed8]/30 bg-white px-5 py-3 text-sm font-semibold text-[#1f4ed8] transition hover:border-[#1f4ed8]"

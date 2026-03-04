@@ -415,3 +415,113 @@ export type ZakatTypeConfig = {
     }>;
   };
 };
+
+export type CounterPaymentChannel = "COUNTER_CASH" | "COUNTER_CARD_TERMINAL";
+export type CounterReconStatus = "unbatched" | "batched" | "reconciled" | "exception";
+export type CounterDepositType = "CASH_BANKIN" | "CARD_SETTLEMENT";
+export type CounterDepositStatus = "draft" | "submitted" | "matched" | "variance" | "reconciled" | "cancelled";
+export type ReconciliationCaseStatus = "open" | "investigating" | "resolved" | "rejected";
+
+export type CounterPaymentRow = {
+  id: number;
+  receiptNo: string;
+  guestName: string;
+  identityNo: string;
+  email: string | null;
+  amount: number;
+  paymentMethod: string;
+  status: string;
+  source: string;
+  counterChannel: CounterPaymentChannel | null;
+  collectedByUserId: number | null;
+  collectionPoint: string | null;
+  terminalRrn: string | null;
+  terminalAuthCode: string | null;
+  terminalTid: string | null;
+  terminalMid: string | null;
+  depositBatchId: number | null;
+  reconStatus: CounterReconStatus;
+  notes: string | null;
+  paidAt: string;
+  createdAt: string;
+  collectedByUser?: { id: number; name: string; role: string };
+  depositBatch?: { id: number; referenceNo: string; status: string };
+};
+
+export type CounterDepositBatchRow = {
+  id: number;
+  referenceNo: string;
+  depositType: CounterDepositType;
+  status: CounterDepositStatus;
+  depositDate: string;
+  bankInDate: string | null;
+  declaredAmount: number;
+  systemAmount: number;
+  varianceAmount: number;
+  collectionPoint: string | null;
+  createdBy: number;
+  approvedBy: number | null;
+  approvedAt: string | null;
+  slipUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+  createdByUser?: { id: number; name: string };
+  approvedByUser?: { id: number; name: string } | null;
+};
+
+export type CounterDepositBatchDetail = CounterDepositBatchRow & {
+  items: Array<{ id: number; batchId: number; guestPaymentId: number; amount: number; createdAt: string }>;
+  payments: CounterPaymentRow[];
+  statusHistory: Array<{
+    id: number;
+    entityType: string;
+    entityId: number;
+    oldStatus: string | null;
+    newStatus: string;
+    changedBy: number | null;
+    changedAt: string;
+    reason: string | null;
+  }>;
+  reconciliationCases: Array<{
+    id: number;
+    caseType: string;
+    status: ReconciliationCaseStatus;
+    reason: string | null;
+    createdAt: string;
+  }>;
+};
+
+export type ReconciliationCaseRow = {
+  id: number;
+  caseType: string;
+  status: ReconciliationCaseStatus;
+  batchId: number | null;
+  statementLineId: number | null;
+  differenceAmount: number | null;
+  reason: string | null;
+  assignedTo: number | null;
+  resolvedBy: number | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  batch?: {
+    id: number;
+    referenceNo: string;
+    depositType: CounterDepositType;
+    status: CounterDepositStatus;
+    systemAmount: number;
+  } | null;
+  statementLine?: {
+    id: number;
+    lineNo: number;
+    txnDate: string;
+    description: string;
+    referenceNo: string | null;
+    netAmount: number;
+    matchStatus: string;
+  } | null;
+  assignedToUser?: { id: number; name: string; role: string } | null;
+  resolvedByUser?: { id: number; name: string; role: string } | null;
+};

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Download, Printer } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, Printer } from "lucide-react";
 import { callbackSpgOnlinePayment, getSpgBatchDetail } from "@/lib/payer-portal-api";
 import { downloadSpgReferencePdf } from "@/lib/spg-receipt-pdf";
 import { PortalAuthGuard } from "@/components/portal/PortalAuthGuard";
@@ -60,6 +60,13 @@ export default function SpgBatchSummaryPage() {
     <PortalAuthGuard expected="corporate">
       <div className="space-y-6">
         <div>
+          <Link
+            href="/payer/corporate/spg"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-[#1f4ed8]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Kembali ke Dashboard SPG
+          </Link>
           <h1 className="text-xl font-semibold text-slate-900">Ringkasan Batch SPG</h1>
           <p className="text-sm text-slate-600">Rujukan batch, status bayaran, dan senarai pekerja.</p>
         </div>

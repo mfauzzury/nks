@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { GuestPaymentSource } from "@prisma/client";
 
 import { prisma } from "../prisma.js";
 import { sendError, sendOk } from "../utils/responses.js";
@@ -53,6 +54,7 @@ guestPaymentsRouter.post("/", async (req, res) => {
       amount: input.amount,
       paymentMethod: input.paymentMethod,
       status: "success",
+      source: GuestPaymentSource.ONLINE_GUEST,
     },
   });
 

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { type PortalSession } from "@/lib/portal-session";
+import { PortalEntryButton } from "@/components/storefront/PortalEntryButton";
 
 type NavVariant = "public" | "portal";
 
@@ -52,7 +53,7 @@ export function StorefrontHeader({
           })}
 
           {!isPortal ? (
-            <Link href="/portal/login" className="rounded-lg bg-[#1f4ed8] px-4 py-2 text-white transition hover:bg-[#1a42ba]">Log Masuk</Link>
+            <PortalEntryButton className="rounded-lg bg-[#1f4ed8] px-4 py-2 text-white transition hover:bg-[#1a42ba]" />
           ) : null}
         </nav>
 
@@ -87,13 +88,10 @@ export function StorefrontHeader({
             })}
 
             {!isPortal ? (
-              <Link
-                href="/portal/login"
+              <PortalEntryButton
                 onClick={() => setMobileOpen(false)}
                 className="mt-2 rounded-lg bg-[#1f4ed8] px-3 py-2 text-center text-sm font-semibold text-white"
-              >
-                Log Masuk
-              </Link>
+              />
             ) : null}
           </div>
         </div>

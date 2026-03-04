@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PortalEntryButton } from "@/components/storefront/PortalEntryButton";
 
 export function CTASection() {
   return (
@@ -8,9 +9,7 @@ export function CTASection() {
         Gunakan portal untuk mengurus bayaran dan rekod anda secara teratur, atau teruskan pembayaran tetamu sekarang.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <Link href="/portal/login" className="rounded-xl bg-[#1f4ed8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1a42ba]">
-          Log Masuk
-        </Link>
+        <PortalEntryButton className="rounded-xl bg-[#1f4ed8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1a42ba]" />
         <Link href="/payer/individual/pay" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-400">
           Bayaran Terus
         </Link>

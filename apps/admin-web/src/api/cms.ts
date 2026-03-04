@@ -3,6 +3,13 @@ import type {
   Category,
   CategoryInput,
   CorporatePayerInput,
+  CounterDepositBatchDetail,
+  CounterDepositBatchRow,
+  CounterDepositStatus,
+  CounterDepositType,
+  CounterPaymentChannel,
+  CounterPaymentRow,
+  CounterReconStatus,
   DuplicateCase,
   IndividualPayerInput,
   IndividualDirectoryCategory,
@@ -30,6 +37,8 @@ import type {
   UserDetail,
   UserInput,
   PaymentGatewayConfig,
+  ReconciliationCaseRow,
+  ReconciliationCaseStatus,
   ZakatTypeConfig,
 } from "@/types";
 import type { AdminMenuPrefs } from "@/config/admin-menu";
@@ -401,5 +410,154 @@ export async function savePaymentGateways(gateways: PaymentGatewayConfig[]) {
   return apiRequest<{ data: { gateways: PaymentGatewayConfig[] } }>("/api/settings/payment-gateways", {
     method: "PUT",
     body: JSON.stringify({ gateways }),
+  });
+}
+
+// Counter + reconciliation
+export async function createCounterPayment(input: {
+  guestName: string;
+  identityNo: string;
+  email?: string;
+  phone?: string;
+  zakatType: string;
+  amount: number;
+  paymentChannel: CounterPaymentChannel;
+  collectionPoint: string;
+  terminalRef?: { rrn: string; authCode: string; tid: string; mid: string };
+  notes?: string;
+}) {
+  return apiRequest<{ data: { paymentId: number; receiptNo: string; paidAt: string; amount: number; status: string } }>("/api/counter/payments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listCounterPayments(params: {
+  page?: number;
+  limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  channel?: CounterPaymentChannel;
+  reconStatus?: CounterReconStatus;
+  collectionPoint?: string;
+  staffId?: number;
+  q?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.dateFrom) qs.set("dateFrom", params.dateFrom);
+  if (params.dateTo) qs.set("dateTo", params.dateTo);
+  if (params.channel) qs.set("channel", params.channel);
+  if (params.reconStatus) qs.set("reconStatus", params.reconStatus);
+  if (params.collectionPoint) qs.set("collectionPoint", params.collectionPoint);
+  if (params.staffId) qs.set("staffId", String(params.staffId));
+  if (params.q) qs.set("q", params.q);
+  return apiRequest<{ data: CounterPaymentRow[]; meta: { page: number; limit: number; total: number } }>(`/api/counter/payments?${qs.toString()}`);
+}
+
+export async function getCounterPayment(id: number) {
+  return apiRequest<{ data: CounterPaymentRow }>(`/api/counter/payments/${id}`);
+}
+
+export async function createCounterDeposit(input: {
+  depositType: CounterDepositType;
+  depositDate: string;
+  collectionPoint?: string;
+  paymentIds: number[];
+  declaredAmount: number;
+  notes?: string;
+  slipFile?: File | null;
+}) {
+  const body = new FormData();
+  body.append("depositType", input.depositType);
+  body.append("depositDate", input.depositDate);
+  body.append("declaredAmount", String(input.declaredAmount));
+  body.append("paymentIds", JSON.stringify(input.paymentIds));
+  if (input.collectionPoint) body.append("collectionPoint", input.collectionPoint);
+  if (input.notes) body.append("notes", input.notes);
+  if (input.slipFile) body.append("slipFile", input.slipFile);
+
+  return apiRequest<{ data: { depositBatchId: number; referenceNo: string; totalAmount: number; itemCount: number; status: CounterDepositStatus } }>(
+    "/api/counter/deposits",
+    { method: "POST", body },
+  );
+}
+
+export async function listCounterDeposits(params: {
+  page?: number;
+  limit?: number;
+  status?: CounterDepositStatus;
+  type?: CounterDepositType;
+  dateFrom?: string;
+  dateTo?: string;
+  referenceNo?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.status) qs.set("status", params.status);
+  if (params.type) qs.set("type", params.type);
+  if (params.dateFrom) qs.set("dateFrom", params.dateFrom);
+  if (params.dateTo) qs.set("dateTo", params.dateTo);
+  if (params.referenceNo) qs.set("referenceNo", params.referenceNo);
+  return apiRequest<{ data: CounterDepositBatchRow[]; meta: { page: number; limit: number; total: number } }>(`/api/counter/deposits?${qs.toString()}`);
+}
+
+export async function getCounterDeposit(id: number) {
+  return apiRequest<{ data: CounterDepositBatchDetail }>(`/api/counter/deposits/${id}`);
+}
+
+export async function uploadBankStatement(input: {
+  file: File;
+  bankAccountNo?: string;
+  statementDateFrom?: string;
+  statementDateTo?: string;
+}) {
+  const body = new FormData();
+  body.append("file", input.file);
+  if (input.bankAccountNo) body.append("bankAccountNo", input.bankAccountNo);
+  if (input.statementDateFrom) body.append("statementDateFrom", input.statementDateFrom);
+  if (input.statementDateTo) body.append("statementDateTo", input.statementDateTo);
+  return apiRequest<{ data: { statementId: number; fileName: string; parsedCount: number; errorCount: number; errors: Array<{ lineNo: number; error: string }> } }>(
+    "/api/reconciliation/statements/upload",
+    { method: "POST", body },
+  );
+}
+
+export async function runReconciliation(statementId: number, dayTolerance = 3) {
+  return apiRequest<{ data: { matched: number; partial: number; unmatched: number } }>("/api/reconciliation/run", {
+    method: "POST",
+    body: JSON.stringify({ statementId, dayTolerance }),
+  });
+}
+
+export async function listReconciliationCases(params: { status?: ReconciliationCaseStatus; page?: number; limit?: number }) {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  return apiRequest<{ data: ReconciliationCaseRow[]; meta: { page: number; limit: number; total: number } }>(`/api/reconciliation/cases?${qs.toString()}`);
+}
+
+export async function resolveReconciliationCase(input: {
+  caseId: number;
+  action: "map_batch" | "mark_bank_fee" | "mark_reversal" | "ignore";
+  batchId?: number;
+  reason?: string;
+}) {
+  return apiRequest<{ data: { caseId: number; status: string } }>(`/api/reconciliation/cases/${input.caseId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: input.action,
+      batchId: input.batchId,
+      reason: input.reason,
+    }),
+  });
+}
+
+export async function confirmDepositReconciliation(depositBatchId: number) {
+  return apiRequest<{ data: { depositBatchId: number; status: string } }>(`/api/reconciliation/deposits/${depositBatchId}/confirm`, {
+    method: "POST",
   });
 }
