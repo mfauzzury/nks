@@ -37,6 +37,10 @@ import PaymentGatewaysView from "@/views/PaymentGatewaysView.vue";
 import ZakatTypeEditorView from "@/views/ZakatTypeEditorView.vue";
 import SpgPendingBatchesView from "@/views/SpgPendingBatchesView.vue";
 import SpgPendingBatchDetailView from "@/views/SpgPendingBatchDetailView.vue";
+import CounterPaymentsListView from "@/views/CounterPaymentsListView.vue";
+import CounterDepositsView from "@/views/CounterDepositsView.vue";
+import CounterReconciliationView from "@/views/CounterReconciliationView.vue";
+import CounterPosView from "@/views/CounterPosView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 
@@ -67,6 +71,10 @@ const router = createRouter({
     { path: "/spg/employers/:payerId/employees", name: "spg-employees", component: SpgEmployeesView, meta: { requiresAuth: true, title: "SPG Employees" } },
     { path: "/spg/payments/pending", name: "spg-payments-pending", component: SpgPendingBatchesView, meta: { requiresAuth: true, title: "SPG Pending Payment" } },
     { path: "/spg/payments/:batchId", name: "spg-payments-detail", component: SpgPendingBatchDetailView, meta: { requiresAuth: true, title: "SPG Batch Detail" } },
+    { path: "/counter/payments", name: "counter-payments", component: CounterPaymentsListView, meta: { requiresAuth: true, title: "Senarai Kutipan Kaunter" } },
+    { path: "/counter/deposits", name: "counter-deposits", component: CounterDepositsView, meta: { requiresAuth: true, title: "Konsolidasi Bank-In" } },
+    { path: "/counter/reconciliation", name: "counter-reconciliation", component: CounterReconciliationView, meta: { requiresAuth: true, title: "Rekonsiliasi Bank" } },
+    { path: "/counter/pos", name: "counter-pos", component: CounterPosView, meta: { requiresAuth: true, title: "POS Kaunter" } },
     { path: "/duplicates", name: "duplicates", component: DuplicateCasesView, meta: { requiresAuth: true, title: "Duplicate Cases" } },
     { path: "/duplicates/:id", name: "duplicate-detail", component: DuplicateCaseDetailView, meta: { requiresAuth: true, title: "Duplicate Case Detail" } },
     { path: "/zakat-config/types", name: "zakat-types", component: ZakatTypesView, meta: { requiresAuth: true, title: "Jenis Zakat" } },

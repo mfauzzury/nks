@@ -4,14 +4,15 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { User, CheckCircle, AlertCircle } from "lucide-react";
 import { getPortalIndividualProfile, registerIndividual, submitProfileUpdateRequest } from "@/lib/payer-portal-api";
-import { getPortalSession } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
+import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 export default function IndividualRegisterPage() {
-  const session = getPortalSession();
+  const session = usePortalSession();
   const isExistingIndividual = session?.payerType === "individu" && Boolean(session.payerId);
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
@@ -147,40 +148,53 @@ export default function IndividualRegisterPage() {
 
   if (isSuccess) {
     return (
-      <div className="space-y-6">
-        <div className="mx-auto max-w-md space-y-4 py-12 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600">
-            <CheckCircle className="h-8 w-8" />
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-6rem)] w-screen overflow-hidden portal-cosmic-bg py-6 md:py-8">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full portal-orb-1 blur-3xl" />
+        <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl" />
+        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
+          {session?.payerType === "individu" ? <PortalSubnav role="individu" session={session} variant="onDark" /> : null}
+          <div className="mx-auto max-w-md space-y-4 py-12 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
+              <CheckCircle className="h-8 w-8" />
+            </div>
+            <h1 className="text-xl font-semibold text-white">Pendaftaran Berjaya!</h1>
+            <p className="text-sm text-purple-100">{message}</p>
+            <p className="text-sm text-purple-200/70">Anda kini boleh log masuk ke portal pembayar.</p>
+            <Button asChild className="mt-4 h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
+              <Link href="/portal/login">Log Masuk</Link>
+            </Button>
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Pendaftaran Berjaya!</h1>
-          <p className="text-sm text-muted-foreground">{message}</p>
-          <p className="text-sm text-muted-foreground">Anda kini boleh log masuk ke portal pembayar.</p>
-          <Button asChild className="mt-4">
-            <Link href="/portal/login">Log Masuk</Link>
-          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <User className="h-5 w-5" />
+    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-6rem)] w-screen overflow-hidden portal-cosmic-bg py-6 md:py-8">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full portal-orb-1 blur-3xl animate-[float_9s_ease-in-out_infinite]" />
+      <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl animate-[float_11s_ease-in-out_infinite]" />
+
+      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
+        {session?.payerType === "individu" ? <PortalSubnav role="individu" session={session} variant="onDark" /> : null}
+
+        <div className="relative rounded-2xl border border-white/20 bg-white/12 p-5 shadow-sm backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+              <User className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-white">Kemaskini Profil Individu</h1>
+              <p className="text-sm text-purple-100">
+                {isExistingIndividual
+                  ? "Lengkapkan maklumat profil anda. No. IC dikunci untuk keselamatan data."
+                  : "Lengkapkan profil pembayar anda dengan maklumat semasa."}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Kemaskini Profil Individu</h1>
-          <p className="text-sm text-muted-foreground">
-            {isExistingIndividual
-              ? "Lengkapkan maklumat profil anda. No. IC dikunci untuk keselamatan data."
-              : "Lengkapkan profil pembayar anda dengan maklumat semasa."}
-          </p>
-        </div>
-      </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
-        <Card>
+        <Card className="border-white/20 portal-card shadow-md">
           <CardHeader>
             <CardTitle className="text-base">Maklumat Asas</CardTitle>
             <CardDescription>Maklumat pengenalan dan hubungan utama pembayar.</CardDescription>
@@ -213,7 +227,7 @@ export default function IndividualRegisterPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-white/20 portal-card shadow-md">
           <CardHeader>
             <CardTitle className="text-base">Maklumat Pekerjaan</CardTitle>
             <CardDescription>Tambah butiran kerjaya untuk melengkapkan profil.</CardDescription>
@@ -242,7 +256,7 @@ export default function IndividualRegisterPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-white/20 portal-card shadow-md">
           <CardHeader>
             <CardTitle className="text-base">Alamat</CardTitle>
             <CardDescription>Isi alamat surat-menyurat utama anda.</CardDescription>
@@ -276,7 +290,7 @@ export default function IndividualRegisterPage() {
         </Card>
 
         {!isExistingIndividual ? (
-          <Card>
+          <Card className="border-white/20 portal-card shadow-md">
             <CardHeader>
               <CardTitle className="text-base">Keselamatan Akaun</CardTitle>
               <CardDescription>Cipta kata laluan untuk akses portal.</CardDescription>
@@ -310,7 +324,7 @@ export default function IndividualRegisterPage() {
         ) : null}
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading || !canSubmit}>
+          <Button type="submit" disabled={loading || !canSubmit} className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
             {loading ? "Menyimpan..." : isExistingIndividual ? "Simpan Perubahan" : "Daftar Sekarang"}
           </Button>
         </div>
@@ -322,6 +336,8 @@ export default function IndividualRegisterPage() {
           <p className="text-sm">{message}</p>
         </div>
       ) : null}
+
+      </div>
     </div>
   );
 }

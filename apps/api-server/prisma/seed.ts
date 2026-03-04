@@ -10,13 +10,23 @@ async function main() {
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
   const adminPassword = process.env.ADMIN_PASSWORD ?? "admin12345";
   const adminName = process.env.ADMIN_NAME ?? "Administrator";
+  const counterEmail = process.env.COUNTER_EMAIL ?? "counter@example.com";
+  const counterPassword = process.env.COUNTER_PASSWORD ?? "counter12345";
+  const counterName = process.env.COUNTER_NAME ?? "Counter Staff";
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
+  const counterPasswordHash = await bcrypt.hash(counterPassword, 12);
 
   await prisma.user.upsert({
     where: { email: adminEmail },
     update: { name: adminName, passwordHash },
     create: { email: adminEmail, name: adminName, passwordHash },
+  });
+
+  await prisma.user.upsert({
+    where: { email: counterEmail },
+    update: { name: counterName, passwordHash: counterPasswordHash, role: "counter" },
+    create: { email: counterEmail, name: counterName, passwordHash: counterPasswordHash, role: "counter" },
   });
 
   const defaultSettings: Array<{ key: string; value: string }> = [
@@ -219,6 +229,21 @@ async function main() {
         "roles.view", "roles.create", "roles.edit", "roles.delete",
         "settings.view", "settings.edit",
         "menus.view", "menus.edit",
+      ]),
+    },
+  });
+
+  await prisma.role.upsert({
+    where: { name: "counter" },
+    update: {},
+    create: {
+      name: "counter",
+      description: "Counter collection role for physical payment and deposit batching",
+      permissions: JSON.stringify([
+        "counter.payments.create",
+        "counter.payments.view_own",
+        "counter.deposits.create",
+        "counter.deposits.view_own",
       ]),
     },
   });
@@ -728,6 +753,7 @@ async function main() {
   }
 
   console.log(`Seeded admin user: ${adminEmail}`);
+  console.log(`Seeded counter user: ${counterEmail}`);
   console.log(`Seeded ${samplePosts.length} sample posts`);
   console.log(`Seeded ${sampleCategories.length} categories`);
   console.log("Seeded default admin role");

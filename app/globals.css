@@ -123,6 +123,15 @@
   body {
     @apply bg-background text-foreground;
   }
+  select {
+    background-color: #ffffff !important;
+    color: #0f172a;
+  }
+  select option,
+  select optgroup {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
 }
 
 @layer utilities {
@@ -148,7 +157,76 @@
 
   .hide-scrollbar::-webkit-scrollbar { display: none; }
   .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Portal cosmic violet theme — edit here to retheme all portal pages */
+  .portal-cosmic-bg {
+    background: linear-gradient(to bottom right, #1a0538, #49108B, #7E30E1);
+  }
+  .portal-orb-1 { background-color: rgba(226, 110, 229, 0.35); }
+  .portal-orb-2 { background-color: rgba(243, 248, 255, 0.3); }
+  .portal-card { background-color: #F3F8FF; }
+
+  .storefront-neon-bg {
+    background:
+      radial-gradient(1200px 500px at 15% -10%, rgba(56, 189, 248, 0.18), transparent 55%),
+      radial-gradient(1000px 420px at 85% -12%, rgba(34, 211, 238, 0.16), transparent 52%),
+      linear-gradient(180deg, #f0f9ff 0%, #eef6ff 35%, #f4f8ff 100%);
+  }
+  .neon-glow {
+    box-shadow: 0 0 0 1px rgba(126, 48, 225, 0.24), 0 10px 30px rgba(226, 110, 229, 0.18);
+  }
   
   /* Tap highlight removal for native feel */
   .no-tap-highlight { -webkit-tap-highlight-color: transparent; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes chatbot-attention {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 12px 29px rgba(126, 48, 225, 0.39);
+  }
+  25% {
+    transform: translateY(-3.9px) scale(1.024);
+    box-shadow: 0 16px 36px rgba(126, 48, 225, 0.5);
+  }
+  50% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 12px 29px rgba(126, 48, 225, 0.39);
+  }
+  75% {
+    transform: translateY(-2.6px) scale(1.013);
+    box-shadow: 0 15px 34px rgba(126, 48, 225, 0.45);
+  }
+}
+
+@keyframes chatbot-icon-wiggle {
+  0%, 72%, 100% { transform: rotate(0deg) scale(1); }
+  76% { transform: rotate(-10deg) scale(1.061); }
+  80% { transform: rotate(10deg) scale(1.061); }
+  84% { transform: rotate(-7.3deg) scale(1.037); }
+  88% { transform: rotate(7.3deg) scale(1.037); }
+  92% { transform: rotate(0deg) scale(1); }
+}
+
+@layer utilities {
+  .chatbot-attention {
+    animation: chatbot-attention 2.2s ease-in-out infinite;
+  }
+
+  .chatbot-attention-icon {
+    animation: chatbot-icon-wiggle 2.2s ease-in-out infinite;
+    transform-origin: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatbot-attention,
+  .chatbot-attention-icon {
+    animation: none !important;
+  }
 }

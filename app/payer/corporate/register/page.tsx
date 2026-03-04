@@ -3,14 +3,15 @@
 import { FormEvent, useState } from "react";
 import { Building2, CheckCircle, AlertCircle } from "lucide-react";
 import { registerCorporate, submitProfileUpdateRequest } from "@/lib/payer-portal-api";
-import { getPortalSession } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
+import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 export default function CorporateRegisterPage() {
-  const session = getPortalSession();
+  const session = usePortalSession();
   const isLoggedIn = Boolean(session && session.payerType !== "individu");
 
   const [message, setMessage] = useState("");
@@ -77,25 +78,33 @@ export default function CorporateRegisterPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Building2 className="h-5 w-5" />
+    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-6rem)] w-screen overflow-hidden portal-cosmic-bg py-6 md:py-8">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full portal-orb-1 blur-3xl animate-[float_9s_ease-in-out_infinite]" />
+      <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl animate-[float_11s_ease-in-out_infinite]" />
+
+      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
+        {isLoggedIn ? <PortalSubnav role="corporate" session={session} variant="onDark" /> : null}
+
+        <div className="relative rounded-2xl border border-white/20 bg-white/12 p-5 shadow-sm backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+              <Building2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-white">
+                {isLoggedIn ? "Kemaskini Maklumat Syarikat" : "Pendaftaran Korporat"}
+              </h1>
+              <p className="text-sm text-purple-100">
+                {isLoggedIn
+                  ? `Kemaskini profil ${session?.companyName || session?.displayName || "syarikat"}`
+                  : "Daftar syarikat atau organisasi sebagai pembayar"}
+              </p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">
-            {isLoggedIn ? "Kemaskini Maklumat Syarikat" : "Pendaftaran Korporat"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isLoggedIn
-              ? `Kemaskini profil ${session?.companyName || session?.displayName || "syarikat"}`
-              : "Daftar syarikat atau organisasi sebagai pembayar"}
-          </p>
-        </div>
-      </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
-        <Card>
+        <Card className="border-white/20 portal-card shadow-md">
           <CardHeader>
             <CardTitle className="text-base">Maklumat Syarikat</CardTitle>
             <CardDescription>
@@ -147,7 +156,7 @@ export default function CorporateRegisterPage() {
         </Card>
 
         {!isLoggedIn && (
-          <Card>
+          <Card className="border-white/20 portal-card shadow-md">
             <CardHeader>
               <CardTitle className="text-base">Kata Laluan</CardTitle>
               <CardDescription>Cipta kata laluan untuk log masuk portal.</CardDescription>
@@ -161,7 +170,7 @@ export default function CorporateRegisterPage() {
           </Card>
         )}
 
-        <Card>
+        <Card className="border-white/20 portal-card shadow-md">
           <CardHeader>
             <CardTitle className="text-base">Wakil yang Diberi Kuasa</CardTitle>
             <CardDescription>Maklumat wakil syarikat untuk urusan portal.</CardDescription>
@@ -191,7 +200,7 @@ export default function CorporateRegisterPage() {
         </Card>
 
         <div className="flex items-center justify-end gap-3">
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading} className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
             {loading ? "Menyimpan..." : isLoggedIn ? "Hantar Kemaskini" : "Hantar Pendaftaran"}
           </Button>
         </div>
@@ -203,6 +212,8 @@ export default function CorporateRegisterPage() {
           <p className="text-sm">{message}</p>
         </div>
       )}
+
+      </div>
     </div>
   );
 }

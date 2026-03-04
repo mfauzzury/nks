@@ -250,17 +250,19 @@ export function Chatbot() {
       {/* Floating button */}
       <button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#1f4ed8] text-white shadow-lg transition-transform hover:scale-105 hover:bg-[#1a42ba] active:scale-95"
+        className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#7E30E1] text-white shadow-lg transition-transform hover:scale-105 hover:bg-[#6b28c0] active:scale-95 ${
+          open ? "" : "chatbot-attention"
+        }`}
         aria-label="Chatbot"
       >
-        {open ? <X className="h-6 w-6" /> : <BotFace className="h-8 w-8" />}
+        {open ? <X className="h-6 w-6" /> : <BotFace className="chatbot-attention-icon h-8 w-8" />}
       </button>
 
       {/* Chat window */}
       {open && (
         <div className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[360px] flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl sm:w-[380px]">
           {/* Header */}
-          <div className="flex items-center gap-3 border-b bg-[#1f4ed8] px-4 py-3 text-white">
+          <div className="flex items-center gap-3 border-b bg-[#7E30E1] px-4 py-3 text-white">
             <BotFace className="h-7 w-7" />
             <div className="flex-1">
               <p className="text-sm font-semibold">Panduan Zakat</p>
@@ -282,7 +284,7 @@ export function Chatbot() {
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
             {!loaded && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#1f4ed8] border-t-transparent" />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#7E30E1] border-t-transparent" />
                 Memuatkan...
               </div>
             )}
@@ -292,7 +294,7 @@ export function Chatbot() {
                   <div
                     className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                       msg.from === "user"
-                        ? "bg-[#1f4ed8] text-white rounded-br-md"
+                        ? "bg-[#7E30E1] text-white rounded-br-md"
                         : "bg-slate-100 text-slate-800 rounded-bl-md"
                     }`}
                   >
@@ -304,7 +306,7 @@ export function Chatbot() {
                         <button
                           key={opt.value}
                           onClick={() => handleOption(opt.value)}
-                          className="inline-flex items-center gap-1 rounded-full border border-[#1f4ed8]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#1f4ed8] transition-colors hover:bg-[#1f4ed8] hover:text-white"
+                          className="inline-flex items-center gap-1 rounded-full border border-[#7E30E1]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#7E30E1] transition-colors hover:bg-[#7E30E1] hover:text-white"
                         >
                           {opt.label}
                           <ChevronRight className="h-3 w-3" />
