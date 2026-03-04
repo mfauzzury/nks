@@ -52,7 +52,7 @@ guestPaymentsRouter.post("/", async (req, res) => {
       identityNo: normalizedIdentity,
       email: input.email,
       amount: input.amount,
-      paymentMethod: input.paymentMethod,
+      paymentMethod: `${input.paymentMethod} | Tahun ${input.financialYear}`,
       status: "success",
       source: GuestPaymentSource.ONLINE_GUEST,
     },

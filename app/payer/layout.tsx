@@ -1,21 +1,22 @@
  "use client";
 
-import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { StorefrontLayout } from "@/components/storefront/StorefrontLayout";
-import { getPortalSession } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
 
 export default function PayerLayout({ children }: { children: React.ReactNode }) {
-  const session = getPortalSession();
-  const role = session?.payerType === "individu" ? "individu" : "corporate";
+  const session = usePortalSession();
   const isPortalSession = Boolean(session);
 
   return (
     <StorefrontLayout
       navVariant={isPortalSession ? "portal" : "public"}
       session={session}
-      subnav={isPortalSession ? <PortalSubnav role={role} session={session} /> : undefined}
+      subnav={undefined}
       showChatbot={!session}
-      mainClassName="mx-auto w-full max-w-6xl px-6 py-6 md:py-8"
+      showHeader={false}
+      showFooter={false}
+      wrapperClassName="portal-cosmic-bg min-h-screen text-slate-900"
+      mainClassName="mx-auto w-full max-w-6xl px-6 pt-0 pb-0"
     >
       {children}
     </StorefrontLayout>

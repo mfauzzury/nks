@@ -24,8 +24,9 @@ import {
   previewSpgBatchUpload,
   type SpgPreviewRow,
 } from "@/lib/payer-portal-api";
-import { getPortalSession } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
 import { PortalAuthGuard } from "@/components/portal/PortalAuthGuard";
+import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,7 +110,7 @@ function StepIndicator({ current }: { current: number }) {
     <nav className="relative flex items-center justify-between">
       <div className="absolute left-0 right-0 top-5 z-0 mx-10 h-0.5 bg-slate-200" />
       <div
-        className="absolute left-0 top-5 z-0 mx-10 h-0.5 bg-[#1f4ed8] transition-all duration-300"
+        className="absolute left-0 top-5 z-0 mx-10 h-0.5 bg-[#7E30E1] transition-all duration-300"
         style={{ width: `${((Math.min(current, 5) - 1) / 4) * 100}%` }}
       />
       {STEPS.map((s) => {
@@ -121,15 +122,15 @@ function StepIndicator({ current }: { current: number }) {
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
                 done
-                  ? "border-[#1f4ed8] bg-[#1f4ed8] text-white"
+                  ? "border-[#7E30E1] bg-[#7E30E1] text-white"
                   : active
-                    ? "border-[#1f4ed8] bg-white text-[#1f4ed8] shadow-sm shadow-blue-200"
+                    ? "border-[#7E30E1] bg-white text-[#7E30E1] shadow-sm shadow-purple-300"
                     : "border-slate-200 bg-white text-slate-400"
               }`}
             >
               {done ? <Check className="h-4.5 w-4.5" /> : <Icon className="h-4.5 w-4.5" />}
             </div>
-            <span className={`text-xs font-medium ${done || active ? "text-[#1f4ed8]" : "text-slate-400"}`}>
+            <span className={`text-xs font-medium ${done || active ? "text-[#7E30E1]" : "text-slate-400"}`}>
               {s.label}
             </span>
           </div>
@@ -140,7 +141,7 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 export default function SpgNewSubmissionPage() {
-  const session = getPortalSession();
+  const session = usePortalSession();
   const employerPayerId = session?.payerId || 0;
   const [step, setStep] = useState(1);
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
@@ -247,24 +248,29 @@ export default function SpgNewSubmissionPage() {
 
   return (
     <PortalAuthGuard expected="corporate">
-      <div className="space-y-6">
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-6rem)] w-screen overflow-hidden portal-cosmic-bg py-6 md:py-8">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full portal-orb-1 blur-3xl animate-[float_9s_ease-in-out_infinite]" />
+        <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl animate-[float_11s_ease-in-out_infinite]" />
+
+        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
+        {session && session.payerType !== "individu" ? <PortalSubnav role="corporate" session={session} variant="onDark" /> : null}
         {/* Back link + header */}
         <div>
           <Link
             href="/payer/corporate/spg"
-            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-[#1f4ed8]"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-[#7E30E1]"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Kembali ke Dashboard SPG
           </Link>
-          <h1 className="text-xl font-semibold text-slate-900">Bayaran SPG Baharu</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-white">Bayaran SPG Baharu</h1>
+          <p className="text-sm text-purple-100">
             Muat naik senarai potongan gaji pekerja, semak data, dan buat bayaran.
           </p>
         </div>
 
         {/* Step indicator */}
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5">
+        <div className="rounded-2xl border border-white/20 portal-card shadow-md px-6 py-5">
           <StepIndicator current={step} />
         </div>
 
@@ -284,7 +290,7 @@ export default function SpgNewSubmissionPage() {
 
         {/* ── Step 1: Month & Year ── */}
         {step === 1 && (
-          <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-white/20 portal-card shadow-md">
             <div className="border-b border-slate-100 px-6 py-4">
               <h2 className="text-base font-semibold text-slate-900">Pilih Tempoh Potongan</h2>
               <p className="text-sm text-slate-500">Tentukan bulan dan tahun bagi potongan gaji ini.</p>
@@ -294,7 +300,7 @@ export default function SpgNewSubmissionPage() {
                 <div className="space-y-2">
                   <Label>Bulan</Label>
                   <select
-                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-[#1f4ed8] focus:outline-none focus:ring-1 focus:ring-[#1f4ed8]"
+                    className="flex h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-base focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
                   >
@@ -328,7 +334,7 @@ export default function SpgNewSubmissionPage() {
 
         {/* ── Step 2: Upload ── */}
         {step === 2 && (
-          <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-white/20 portal-card shadow-md">
             <div className="border-b border-slate-100 px-6 py-4">
               <h2 className="text-base font-semibold text-slate-900">Muat Naik Senarai Pekerja</h2>
               <p className="text-sm text-slate-500">
@@ -379,7 +385,7 @@ export default function SpgNewSubmissionPage() {
 
         {/* ── Step 3: Preview / Edit ── */}
         {step === 3 && (
-          <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-white/20 portal-card shadow-md">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Semak & Edit Senarai Pekerja</h2>
@@ -480,7 +486,7 @@ export default function SpgNewSubmissionPage() {
 
         {/* ── Step 4: Payment Setup ── */}
         {step === 4 && (
-          <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-white/20 portal-card shadow-md">
             <div className="border-b border-slate-100 px-6 py-4">
               <h2 className="text-base font-semibold text-slate-900">Tetapan Bayaran</h2>
               <p className="text-sm text-slate-500">Pilih kaedah bayaran dan muat naik dokumen sokongan jika perlu.</p>
@@ -496,11 +502,11 @@ export default function SpgNewSubmissionPage() {
                       onClick={() => setPaymentChannel(ch.code)}
                       className={`rounded-xl border-2 p-3 text-left transition ${
                         paymentChannel === ch.code
-                          ? "border-[#1f4ed8] bg-blue-50"
+                          ? "border-[#7E30E1] bg-purple-50"
                           : "border-slate-200 bg-white hover:border-slate-300"
                       }`}
                     >
-                      <p className={`text-sm font-medium ${paymentChannel === ch.code ? "text-[#1f4ed8]" : "text-slate-700"}`}>
+                      <p className={`text-sm font-medium ${paymentChannel === ch.code ? "text-[#7E30E1]" : "text-slate-700"}`}>
                         {ch.label}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-400">
@@ -559,7 +565,7 @@ export default function SpgNewSubmissionPage() {
 
         {/* ── Step 5: Confirmation & Submit ── */}
         {step === 5 && (
-          <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-white/20 portal-card shadow-md">
             <div className="border-b border-slate-100 px-6 py-4">
               <h2 className="text-base font-semibold text-slate-900">Pengesahan & Hantar</h2>
               <p className="text-sm text-slate-500">Semak ringkasan sebelum menghantar batch SPG.</p>
@@ -581,11 +587,11 @@ export default function SpgNewSubmissionPage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Jumlah Bayaran</p>
-                    <p className="mt-0.5 text-sm font-semibold text-[#1f4ed8]">{moneyFormat(totalAmount)}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-[#7E30E1]">{moneyFormat(totalAmount)}</p>
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">
+              <div className="rounded-xl bg-purple-50 px-4 py-3 text-sm text-purple-800">
                 {selectedChannel.online
                   ? "Selepas hantar, anda akan diarahkan ke gateway pembayaran dalam talian."
                   : "Batch akan disimpan sebagai 'Menunggu Bayaran'. Sila buat bayaran melalui kaedah yang dipilih."}
@@ -603,6 +609,7 @@ export default function SpgNewSubmissionPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </PortalAuthGuard>
   );

@@ -40,8 +40,9 @@ function normalizeIdentity(identityNo: string) {
 }
 
 function buildCounterReceiptNo() {
-  const rand = Math.floor(Math.random() * 9000) + 1000;
-  return `KRCPT-${Date.now()}-${rand}`;
+  const now = Date.now().toString(36).toUpperCase();
+  const rand = Math.floor(Math.random() * 900) + 100;
+  return `KR${now}${rand}`;
 }
 
 function buildCounterDepositReferenceNo() {
@@ -64,7 +65,14 @@ counterRouter.post("/payments", async (req: AuthedRequest, res) => {
   if (!actor) return;
 
   const input = counterPaymentCreateSchema.parse(req.body);
-  const paymentMethod = `${input.paymentChannel === "COUNTER_CASH" ? "Counter Cash" : "Card Terminal"} | ${input.zakatType}`;
+  const channelLabels: Record<string, string> = {
+    COUNTER_CASH: "Tunai",
+    COUNTER_CARD_TERMINAL: "Kad Terminal",
+    COUNTER_CHEQUE: "Cek",
+    COUNTER_DEBIT: "Debit",
+    COUNTER_QR: "QR",
+  };
+  const paymentMethod = `${channelLabels[input.paymentChannel] || input.paymentChannel} | ${input.zakatType} | Tahun ${input.financialYear}`;
 
   const row = await prisma.guestPayment.create({
     data: {

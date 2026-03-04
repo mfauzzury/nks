@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { type ReactNode } from "react";
-import { useState } from "react";
-import { getPortalSession } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
 
 type PortalEntryButtonProps = {
   className: string;
@@ -20,7 +19,7 @@ export function PortalEntryButton({
   onClick,
   children,
 }: PortalEntryButtonProps) {
-  const [hasSession] = useState(() => (typeof window !== "undefined" ? Boolean(getPortalSession()) : false));
+  const hasSession = Boolean(usePortalSession());
 
   return (
     <Link href={hasSession ? "/portal" : "/portal/login"} onClick={onClick} className={className}>

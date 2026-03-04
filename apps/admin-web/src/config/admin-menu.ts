@@ -159,7 +159,6 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     id: "kutipan-kaunter",
     label: "Kutipan Kaunter",
     items: [
-      { id: "counter-payment-new", label: "Bayaran Kaunter", to: "/counter/payments/new", icon: Wallet },
       { id: "counter-payments", label: "Senarai Kutipan", to: "/counter/payments", icon: Wallet },
       { id: "counter-deposits", label: "Konsolidasi Bank-In", to: "/counter/deposits", icon: Wallet },
       { id: "counter-reconciliation", label: "Rekonsiliasi Bank", to: "/counter/reconciliation", icon: Wallet },

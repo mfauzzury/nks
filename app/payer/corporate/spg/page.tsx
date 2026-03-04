@@ -12,8 +12,9 @@ import {
   Users,
 } from "lucide-react";
 import { getSpgBatchList, type SpgBatchListItem } from "@/lib/payer-portal-api";
-import { getPortalSession } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
 import { PortalAuthGuard } from "@/components/portal/PortalAuthGuard";
+import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Button } from "@/components/ui/button";
 
 const CHANNELS = [
@@ -70,7 +71,7 @@ function formatDate(value: string) {
 }
 
 export default function CorporateSpgDashboardPage() {
-  const session = getPortalSession();
+  const session = usePortalSession();
   const employerPayerId = session?.payerId || 0;
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState<SpgBatchListItem[]>([]);
@@ -125,66 +126,73 @@ export default function CorporateSpgDashboardPage() {
 
   return (
     <PortalAuthGuard expected="corporate">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Briefcase className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">Skim Potongan Gaji (SPG)</h1>
-              <p className="text-sm text-slate-500">
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-6rem)] w-screen overflow-hidden portal-cosmic-bg py-6 md:py-8">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full portal-orb-1 blur-3xl animate-[float_9s_ease-in-out_infinite]" />
+        <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl animate-[float_11s_ease-in-out_infinite]" />
+
+        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
+          {session && session.payerType !== "individu" ? <PortalSubnav role="corporate" session={session} variant="onDark" /> : null}
+          {/* Header */}
+          <div className="relative rounded-2xl border border-white/20 bg-white/12 p-5 shadow-sm backdrop-blur-md">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+                  <Briefcase className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold text-white">Skim Potongan Gaji (SPG)</h1>
+                  <p className="text-sm text-purple-100">
                 {session?.companyName || session?.displayName || "Syarikat"} &middot; {session?.identityNo || "-"}
-              </p>
+                </p>
+              </div>
             </div>
+            <Link href="/payer/corporate/spg/new">
+              <Button className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0] gap-2">
+                <Plus className="h-4 w-4" />
+                Tambah Bayaran
+              </Button>
+            </Link>
           </div>
-          <Link href="/payer/corporate/spg/new">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Tambah Bayaran
-            </Button>
-          </Link>
         </div>
 
         {/* Stats cards */}
         <section className="grid gap-4 sm:grid-cols-3">
-          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+          <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">Jumlah Dibayar</p>
-              <Banknote className="h-4.5 w-4.5 text-[#1f4ed8]" />
+              <p className="text-sm font-medium text-purple-100">Jumlah Dibayar</p>
+              <Banknote className="h-4.5 w-4.5 text-purple-200" />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">
+            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">
               {loading ? "..." : moneyFormat(totalPaid)}
             </p>
-            <p className="mt-1 text-xs text-slate-400">Keseluruhan batch berjaya</p>
+            <p className="mt-1 text-xs text-purple-200/70">Keseluruhan batch berjaya</p>
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+          <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">Jumlah Pekerja</p>
-              <Users className="h-4.5 w-4.5 text-[#1f4ed8]" />
+              <p className="text-sm font-medium text-purple-100">Jumlah Pekerja</p>
+              <Users className="h-4.5 w-4.5 text-purple-200" />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">
+            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">
               {loading ? "..." : totalEmployees.toLocaleString()}
             </p>
-            <p className="mt-1 text-xs text-slate-400">Pekerja dalam batch berjaya</p>
+            <p className="mt-1 text-xs text-purple-200/70">Pekerja dalam batch berjaya</p>
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+          <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">Menunggu Bayaran</p>
+              <p className="text-sm font-medium text-purple-100">Menunggu Bayaran</p>
               <Clock className="h-4.5 w-4.5 text-amber-500" />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">
+            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">
               {loading ? "..." : pendingCount}
             </p>
-            <p className="mt-1 text-xs text-slate-400">Batch belum selesai</p>
+            <p className="mt-1 text-xs text-purple-200/70">Batch belum selesai</p>
           </article>
         </section>
 
         {/* Batch history table */}
-        <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="rounded-2xl border border-white/20 portal-card p-0 shadow-md">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Senarai Batch SPG</h2>
@@ -194,7 +202,7 @@ export default function CorporateSpgDashboardPage() {
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-[#1f4ed8] focus:outline-none focus:ring-1 focus:ring-[#1f4ed8]"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
               >
                 <option value="">Semua Tahun</option>
                 {yearOptions.map((y) => (
@@ -204,7 +212,7 @@ export default function CorporateSpgDashboardPage() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-[#1f4ed8] focus:outline-none focus:ring-1 focus:ring-[#1f4ed8]"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -288,6 +296,7 @@ export default function CorporateSpgDashboardPage() {
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       </div>

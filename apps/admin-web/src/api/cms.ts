@@ -420,6 +420,7 @@ export async function createCounterPayment(input: {
   email?: string;
   phone?: string;
   zakatType: string;
+  financialYear: string;
   amount: number;
   paymentChannel: CounterPaymentChannel;
   collectionPoint: string;
@@ -559,5 +560,41 @@ export async function resolveReconciliationCase(input: {
 export async function confirmDepositReconciliation(depositBatchId: number) {
   return apiRequest<{ data: { depositBatchId: number; status: string } }>(`/api/reconciliation/deposits/${depositBatchId}/confirm`, {
     method: "POST",
+  });
+}
+
+export async function lookupPayerByIc(identityNo: string) {
+  return apiRequest<{
+    data: {
+      id: number;
+      payerCode: string;
+      displayName: string;
+      identityNo: string;
+      email: string | null;
+      phone: string | null;
+      individual: { fullName: string } | null;
+    };
+  }>(`/api/payers/portal-profile/${encodeURIComponent(identityNo)}`);
+}
+
+export async function quickRegisterPayer(input: {
+  fullName: string;
+  mykadOrPassport: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+}) {
+  return apiRequest<{ data: PayerProfile }>("/api/payers/individual", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: input.fullName,
+      fullName: input.fullName,
+      mykadOrPassport: input.mykadOrPassport,
+      identityNo: input.mykadOrPassport,
+      identityType: "mykad",
+      email: input.email || undefined,
+      phone: input.phone || undefined,
+      password: input.password || undefined,
+    }),
   });
 }

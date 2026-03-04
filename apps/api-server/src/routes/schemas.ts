@@ -95,7 +95,7 @@ export const spgPayrollBatchStatusSchema = z.enum([
   "paid_failed",
   "cancelled",
 ]);
-export const counterPaymentChannelSchema = z.enum(["COUNTER_CASH", "COUNTER_CARD_TERMINAL"]);
+export const counterPaymentChannelSchema = z.enum(["COUNTER_CASH", "COUNTER_CARD_TERMINAL", "COUNTER_CHEQUE", "COUNTER_DEBIT", "COUNTER_QR"]);
 export const counterReconStatusSchema = z.enum(["unbatched", "batched", "reconciled", "exception"]);
 export const counterDepositTypeSchema = z.enum(["CASH_BANKIN", "CARD_SETTLEMENT"]);
 export const counterDepositStatusSchema = z.enum(["draft", "submitted", "matched", "variance", "reconciled", "cancelled"]);
@@ -299,6 +299,7 @@ export const guestPaymentCreateSchema = z.object({
   email: z.string().email().optional(),
   amount: z.number().positive(),
   paymentMethod: z.string().min(1),
+  financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
 });
 
 export const corporateZakatPaymentSchema = z.object({
@@ -308,7 +309,7 @@ export const corporateZakatPaymentSchema = z.object({
   amount: z.number().positive(),
   paymentMethod: z.string().min(1),
   zakatType: z.string().optional(),
-  financialYear: z.string().optional(),
+  financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
 });
 
 export const zakatTypesSchema = z.object({
@@ -357,6 +358,7 @@ export const counterPaymentCreateSchema = z
     email: z.string().email().optional(),
     phone: z.string().trim().optional(),
     zakatType: z.string().trim().min(1),
+    financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
     amount: z.number().positive(),
     paymentChannel: counterPaymentChannelSchema,
     collectionPoint: z.string().trim().min(1).max(120),

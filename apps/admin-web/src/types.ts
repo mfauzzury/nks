@@ -416,7 +416,7 @@ export type ZakatTypeConfig = {
   };
 };
 
-export type CounterPaymentChannel = "COUNTER_CASH" | "COUNTER_CARD_TERMINAL";
+export type CounterPaymentChannel = "COUNTER_CASH" | "COUNTER_CARD_TERMINAL" | "COUNTER_CHEQUE" | "COUNTER_DEBIT" | "COUNTER_QR";
 export type CounterReconStatus = "unbatched" | "batched" | "reconciled" | "exception";
 export type CounterDepositType = "CASH_BANKIN" | "CARD_SETTLEMENT";
 export type CounterDepositStatus = "draft" | "submitted" | "matched" | "variance" | "reconciled" | "cancelled";

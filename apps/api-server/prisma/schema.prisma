@@ -83,6 +83,9 @@ enum GuestPaymentSource {
 enum CounterPaymentChannel {
   COUNTER_CASH
   COUNTER_CARD_TERMINAL
+  COUNTER_CHEQUE
+  COUNTER_DEBIT
+  COUNTER_QR
 }
 
 enum CounterReconStatus {

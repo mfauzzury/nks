@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { CreditCard, Printer, ReceiptText, Save, Wallet } from "lucide-vue-next";
+import { CreditCard, Monitor, Printer, ReceiptText, Save, Wallet } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { createCounterPayment, getZakatTypes } from "@/api/cms";
 import type { CounterPaymentChannel, ZakatTypeConfig } from "@/types";
+import { downloadReceiptPdf as downloadPdf } from "@/utils/receipt-pdf";
 
 const submitting = ref(false);
 const message = ref("");
@@ -18,6 +19,7 @@ const form = ref({
   email: "",
   phone: "",
   zakatType: "",
+  financialYear: String(new Date().getFullYear()),
   amount: 0,
   paymentChannel: "COUNTER_CASH" as CounterPaymentChannel,
   collectionPoint: "Kaunter Utama",
@@ -30,68 +32,36 @@ const form = ref({
 
 const showTerminalRef = computed(() => form.value.paymentChannel === "COUNTER_CARD_TERMINAL");
 
-function escapePdfText(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-}
+const channelLabels: Record<string, string> = {
+  COUNTER_CASH: "Tunai",
+  COUNTER_CARD_TERMINAL: "Kad Terminal",
+  COUNTER_CHEQUE: "Cek",
+  COUNTER_DEBIT: "Debit",
+  COUNTER_QR: "QR",
+};
 
 function downloadReceiptPdf() {
   if (!receipt.value) return;
-  const lines = [
-    "RESIT BAYARAN KAUNTER - NKS",
-    "",
-    `No. Resit: ${receipt.value.receiptNo}`,
-    `Nama: ${form.value.guestName}`,
-    `IC / Passport: ${form.value.identityNo}`,
-    `Jenis Zakat: ${form.value.zakatType}`,
-    `Jumlah: RM ${Number(receipt.value.amount).toFixed(2)}`,
-    `Kaedah Bayaran: ${form.value.paymentChannel}`,
-    `Pusat Kutipan: ${form.value.collectionPoint}`,
-    `Tarikh: ${new Date(receipt.value.paidAt).toLocaleString("ms-MY")}`,
-    "",
-    "Terima kasih atas sumbangan zakat anda.",
-  ];
-
-  const content = lines
-    .map((line, index) => {
-      const y = 800 - index * 24;
-      return `BT /F1 12 Tf 50 ${y} Td (${escapePdfText(line)}) Tj ET`;
-    })
-    .join("\n");
-
-  const objects = [
-    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
-    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj",
-    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
-    `5 0 obj << /Length ${content.length} >> stream\n${content}\nendstream endobj`,
-  ];
-
-  let pdf = "%PDF-1.4\n";
-  const offsets: number[] = [0];
-  for (let i = 0; i < objects.length; i += 1) {
-    offsets.push(pdf.length);
-    pdf += `${i + 1} 0 obj\n${objects[i]}\n`;
-  }
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n`;
-  pdf += "0000000000 65535 f \n";
-  for (let i = 1; i < offsets.length; i += 1) {
-    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-
-  const bytes = new TextEncoder().encode(pdf);
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${receipt.value.receiptNo}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadPdf({
+    receiptNo: receipt.value.receiptNo,
+    paidAt: receipt.value.paidAt,
+    amount: receipt.value.amount,
+    status: receipt.value.status,
+    payerName: form.value.guestName,
+    payerIc: form.value.identityNo,
+    zakatType: form.value.zakatType,
+    financialYear: form.value.financialYear,
+    paymentChannel: channelLabels[form.value.paymentChannel] || form.value.paymentChannel,
+    collectionPoint: form.value.collectionPoint,
+  });
 }
 
 function printReceipt() {
   window.print();
+}
+
+function openPos() {
+  window.open("/counter/pos", "_blank");
 }
 
 async function submitForm() {
@@ -106,6 +76,7 @@ async function submitForm() {
       email: form.value.email || undefined,
       phone: form.value.phone || undefined,
       zakatType: form.value.zakatType,
+      financialYear: form.value.financialYear,
       amount: Number(form.value.amount),
       paymentChannel: form.value.paymentChannel,
       collectionPoint: form.value.collectionPoint,
@@ -145,7 +116,16 @@ onMounted(async () => {
 <template>
   <AdminLayout>
     <div class="w-full space-y-4">
-      <h1 class="page-title">Bayaran Kaunter</h1>
+      <div class="flex items-center justify-between">
+        <h1 class="page-title">Bayaran Kaunter</h1>
+        <button
+          class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          @click="openPos"
+        >
+          <Monitor class="h-4 w-4" />
+          Mod POS
+        </button>
+      </div>
 
       <div v-if="message" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ message }}</div>
       <div v-if="error" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ error }}</div>
@@ -154,64 +134,70 @@ onMounted(async () => {
         <form class="grid grid-cols-1 gap-3 md:grid-cols-2" @submit.prevent="submitForm">
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Nama Pembayar</label>
-            <input v-model="form.guestName" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="form.guestName" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">IC / Passport</label>
-            <input v-model="form.identityNo" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="form.identityNo" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Email</label>
-            <input v-model="form.email" type="email" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="form.email" type="email" class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Telefon</label>
-            <input v-model="form.phone" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="form.phone" class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Jenis Zakat</label>
-            <select v-model="form.zakatType" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <select v-model="form.zakatType" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               <option v-for="item in zakatTypes" :key="item.code" :value="item.name">{{ item.name }}</option>
             </select>
           </div>
           <div>
+            <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Tahun Bayaran Zakat</label>
+            <select v-model="form.financialYear" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              <option v-for="y in Array.from({ length: 11 }, (_, idx) => new Date().getFullYear() - idx)" :key="y" :value="String(y)">{{ y }}</option>
+            </select>
+          </div>
+          <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Jumlah (RM)</label>
-            <input v-model.number="form.amount" min="0.01" step="0.01" type="number" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model.number="form.amount" min="0.01" step="0.01" type="number" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Kaedah Bayaran</label>
-            <select v-model="form.paymentChannel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <select v-model="form.paymentChannel" class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               <option value="COUNTER_CASH">Tunai</option>
               <option value="COUNTER_CARD_TERMINAL">Kad Terminal</option>
             </select>
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Pusat Kutipan</label>
-            <input v-model="form.collectionPoint" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <input v-model="form.collectionPoint" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
 
           <template v-if="showTerminalRef">
             <div>
               <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">RRN</label>
-              <input v-model="form.rrn" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input v-model="form.rrn" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Auth Code</label>
-              <input v-model="form.authCode" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input v-model="form.authCode" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Terminal ID (TID)</label>
-              <input v-model="form.tid" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input v-model="form.tid" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Merchant ID (MID)</label>
-              <input v-model="form.mid" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input v-model="form.mid" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </div>
           </template>
 
           <div class="md:col-span-2">
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Catatan</label>
-            <textarea v-model="form.notes" rows="2" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <textarea v-model="form.notes" rows="2" class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
           </div>
 
           <div class="md:col-span-2 flex justify-end">
@@ -245,6 +231,7 @@ onMounted(async () => {
           <p><span class="font-medium">Nama:</span> {{ form.guestName }}</p>
           <p><span class="font-medium">IC / Passport:</span> {{ form.identityNo }}</p>
           <p><span class="font-medium">Jenis Zakat:</span> {{ form.zakatType }}</p>
+          <p><span class="font-medium">Tahun Zakat:</span> {{ form.financialYear }}</p>
           <p><span class="font-medium">Kaedah:</span> {{ form.paymentChannel }}</p>
           <p><span class="font-medium">Pusat Kutipan:</span> {{ form.collectionPoint }}</p>
           <p><span class="font-medium">Tarikh:</span> {{ new Date(receipt.paidAt).toLocaleString("ms-MY") }}</p>

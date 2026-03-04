@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Eye, PlusCircle, Search } from "lucide-vue-next";
+import { Banknote, Hash, Monitor, PlusCircle, Search, TrendingUp, Users } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { getCounterPayment, listCounterPayments } from "@/api/cms";
@@ -27,6 +27,16 @@ function fmtDate(value: string) {
   return new Date(value).toLocaleString("ms-MY");
 }
 
+const totalAmount = computed(() => rows.value.reduce((sum, r) => sum + Number(r.amount || 0), 0));
+const totalTransactions = computed(() => rows.value.length);
+const uniquePayers = computed(() => new Set(rows.value.map((r) => r.identityNo)).size);
+const todayAmount = computed(() => {
+  const today = new Date().toDateString();
+  return rows.value
+    .filter((r) => new Date(r.paidAt).toDateString() === today)
+    .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+});
+
 const allChecked = computed({
   get: () => rows.value.length > 0 && selectedIds.value.length === rows.value.length,
   set: (checked: boolean) => {
@@ -45,6 +55,10 @@ function toggleSelected(id: number) {
 function goToDepositWithSelected() {
   if (selectedIds.value.length === 0) return;
   router.push({ path: "/counter/deposits", query: { add: selectedIds.value.join(",") } });
+}
+
+function openPos() {
+  window.open("/counter/pos", "_blank");
 }
 
 async function openReceipt(id: number) {
@@ -143,9 +157,53 @@ onMounted(load);
           >
             <PlusCircle class="h-4 w-4" /> Tambah ke Batch
           </button>
-          <router-link to="/counter/payments/new" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
-            Bayaran Kaunter
-          </router-link>
+          <button
+            class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+            @click="openPos"
+          >
+            <Monitor class="h-4 w-4" />
+            Mod POS
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Hash class="h-5 w-5" />
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Jumlah Transaksi</p>
+            <p class="text-lg font-bold text-slate-900">{{ totalTransactions }}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <Banknote class="h-5 w-5" />
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Jumlah Kutipan</p>
+            <p class="text-lg font-bold text-slate-900">{{ fmtCurrency(totalAmount) }}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+            <TrendingUp class="h-5 w-5" />
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Kutipan Hari Ini</p>
+            <p class="text-lg font-bold text-slate-900">{{ fmtCurrency(todayAmount) }}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+            <Users class="h-5 w-5" />
+          </div>
+          <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Pembayar Unik</p>
+            <p class="text-lg font-bold text-slate-900">{{ uniquePayers }}</p>
+          </div>
         </div>
       </div>
 
@@ -179,45 +237,33 @@ onMounted(load);
                 <th class="px-3 py-2"><input v-model="allChecked" type="checkbox" /></th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Resit</th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Tarikh</th>
-                <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">IC</th>
-                <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Nama</th>
+                <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Pembayar</th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Jenis Zakat</th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Channel</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Amaun</th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Recon</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Tindakan</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="row in rows" :key="row.id" class="transition-colors hover:bg-slate-50">
-                <td class="px-3 py-2">
+              <tr v-for="row in rows" :key="row.id" class="cursor-pointer transition-colors hover:bg-slate-50" @click="openReceipt(row.id)">
+                <td class="px-3 py-2" @click.stop>
                   <input :checked="selectedIds.includes(row.id)" :disabled="row.reconStatus !== 'unbatched'" type="checkbox" @change="toggleSelected(row.id)" />
                 </td>
                 <td class="px-3 py-2 font-medium text-slate-800">{{ row.receiptNo }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ fmtDate(row.paidAt) }}</td>
-                <td class="px-3 py-2 text-slate-700">{{ row.identityNo }}</td>
-                <td class="px-3 py-2 text-slate-800">{{ row.guestName }}</td>
+                <td class="px-3 py-2">
+                  <p class="font-medium text-slate-800">{{ row.guestName }}</p>
+                  <p class="text-xs text-slate-500">{{ row.identityNo }}</p>
+                </td>
                 <td class="px-3 py-2 text-slate-600">{{ row.paymentMethod.split('|').map((p) => p.trim())[1] || '-' }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ row.counterChannel }}</td>
                 <td class="px-3 py-2 text-right font-semibold text-slate-900">{{ fmtCurrency(row.amount) }}</td>
                 <td class="px-3 py-2">
                   <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{{ row.reconStatus }}</span>
                 </td>
-                <td class="px-3 py-2 text-right">
-                  <div class="flex items-center justify-end gap-1.5">
-                    <button class="group relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" @click="openReceipt(row.id)">
-                      <Eye class="h-3.5 w-3.5" />
-                      <span class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Lihat Resit</span>
-                    </button>
-                    <button class="group relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" :disabled="row.reconStatus !== 'unbatched'" @click="router.push({ path: '/counter/deposits', query: { add: String(row.id) } })">
-                      <PlusCircle class="h-3.5 w-3.5" />
-                      <span class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Tambah ke Batch</span>
-                    </button>
-                  </div>
-                </td>
               </tr>
-              <tr v-if="loading"><td colspan="10" class="px-3 py-6 text-center text-slate-400">Memuatkan...</td></tr>
-              <tr v-if="!loading && rows.length === 0"><td colspan="10" class="px-3 py-6 text-center text-slate-400">Tiada data kutipan.</td></tr>
+              <tr v-if="loading"><td colspan="8" class="px-3 py-6 text-center text-slate-400">Memuatkan...</td></tr>
+              <tr v-if="!loading && rows.length === 0"><td colspan="8" class="px-3 py-6 text-center text-slate-400">Tiada data kutipan.</td></tr>
             </tbody>
           </table>
         </div>
