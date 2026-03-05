@@ -21,6 +21,10 @@ export const env = {
   csrfCookieName: process.env.CSRF_COOKIE_NAME ?? "cms_csrf",
   uploadDir: path.resolve(rootDir, process.env.UPLOAD_DIR ?? "uploads"),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_MB ?? 5) * 1024 * 1024,
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  /** PGP decryption password for JAN encrypted files (fallback if IntegrationConfig not set) */
+  janPgpPassword: process.env.JAN_PGP_PASSWORD ?? "",
 };
 
 export const isProduction = env.nodeEnv === "production";

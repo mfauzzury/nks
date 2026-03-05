@@ -718,3 +718,273 @@ model SpgPayrollReceipt {
   pdfUrl    String?
   batch     SpgPayrollBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 }
+
+// -----------------------------------------------------------------------------
+// Integration 3rd Party Module (Kategori Sumber, Sumber Data, File Upload)
+// -----------------------------------------------------------------------------
+
+enum IntegrationFileType {
+  ENCRYPTED_TXT
+  TXT
+  CSV
+  EXCEL
+}
+
+enum IntegrationTransportType {
+  FTP
+  SFTP
+  MANUAL
+}
+
+enum IntegrationStagingStatus {
+  NEW
+  INVALID
+  DUPLICATE
+  READY
+  POSTED
+}
+
+enum IntegrationDuplicateType {
+  SAME_FILE
+  CROSS_FILE
+  INTERNAL
+}
+
+enum ReconciliationMatchStatus {
+  MATCHED
+  DUPLICATE
+  MISMATCH
+  UNMATCHED
+}
+
+model IntegrationSourceCategory {
+  id        Int                 @id @default(autoincrement())
+  code      String              @unique @db.VarChar(30)
+  name      String              @db.VarChar(100)
+  isActive  Boolean             @default(true)
+  notes     String?             @db.Text
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  sources   IntegrationSource[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model IntegrationSource {
+  id            Int                       @id @default(autoincrement())
+  code          String                    @unique @db.VarChar(30)
+  name          String                    @db.VarChar(100)
+  categoryId    Int
+  transportType IntegrationTransportType @default(MANUAL)
+  isActive      Boolean                   @default(true)
+  notes         String?                   @db.Text
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  category      IntegrationSourceCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  files         IntegrationFile[]
+  configs       IntegrationConfig[]
+
+  @@index([code])
+  @@index([categoryId])
+  @@index([isActive])
+}
+
+model IntegrationFile {
+  id                   Int                     @id @default(autoincrement())
+  sourceId             Int
+  fileName             String                  @db.VarChar(255)
+  filePath             String?                 @db.VarChar(500)
+  fileHashSha256       String                  @unique @db.Char(64)
+  receivedChannel      String                  @default("MANUAL") @db.VarChar(20)
+  fileType             IntegrationFileType     @default(ENCRYPTED_TXT)
+  description          String?                 @db.Text
+  receivedAt           DateTime                @default(now())
+  encrypted            Boolean                 @default(true)
+  encryptionMethod     String?                 @db.VarChar(50)
+  decryptStatus        String                  @default("PENDING") @db.VarChar(20)
+  validationStatus     String                  @default("PENDING") @db.VarChar(20)
+  processingStatus     String                  @default("PENDING") @db.VarChar(20)
+  totalRecordsDeclared Int?
+  totalAmountDeclared  Decimal?                 @db.Decimal(18, 2)
+  totalRecordsParsed   Int?
+  totalAmountParsed    Decimal?                 @db.Decimal(18, 2)
+  errorSummary         String?                 @db.Text
+  columnMappingJson    String?                 @db.Text
+  aiDetectedSource     String?                 @db.VarChar(30)
+  aiConfidence         Float?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  source               IntegrationSource       @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  events               IntegrationFileEvent[]
+  stagingTxs            IntegrationStagingTx[]
+  jobs                 IntegrationJob[]
+
+  @@index([sourceId])
+  @@index([receivedAt])
+  @@index([processingStatus])
+}
+
+model IntegrationFileEvent {
+  id           Int             @id @default(autoincrement())
+  fileId       Int
+  eventType    String          @db.VarChar(30)
+  eventStatus  String          @db.VarChar(20)
+  eventMessage String?         @db.Text
+  createdBy    String?         @default("SYSTEM") @db.VarChar(50)
+  createdAt    DateTime        @default(now())
+  file         IntegrationFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model IntegrationStagingTx {
+  id               Int                          @id @default(autoincrement())
+  fileId           Int
+  sourceTxRef      String?                      @db.VarChar(80)
+  payerIc          String?                      @db.VarChar(14)
+  payerName        String?                      @db.VarChar(150)
+  txDate           DateTime                     @db.Date
+  txTime           String?                      @db.VarChar(12)
+  amount           Decimal                      @db.Decimal(18, 2)
+  channel          String?                      @db.VarChar(30)
+  currency         String                       @default("MYR") @db.Char(3)
+  recordHash       String                       @db.Char(64)
+  stagingStatus    IntegrationStagingStatus     @default(NEW)
+  validationErrors String?                      @db.Text
+  createdAt        DateTime                     @default(now())
+  file             IntegrationFile              @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  duplicates       IntegrationStagingDuplicate[]
+  reconResults     ReconciliationResult[]
+
+  @@unique([fileId, recordHash])
+  @@index([fileId])
+  @@index([payerIc, txDate, amount])
+  @@index([stagingStatus])
+}
+
+model IntegrationStagingDuplicate {
+  id                   Int                      @id @default(autoincrement())
+  stagingTxId          Int
+  duplicateType        IntegrationDuplicateType
+  matchedStagingTxId    Int?
+  matchedInternalTxId   String?                  @db.VarChar(36)
+  reason               String?                   @db.Text
+  createdAt            DateTime                 @default(now())
+  stagingTx            IntegrationStagingTx      @relation(fields: [stagingTxId], references: [id], onDelete: Cascade)
+
+  @@index([stagingTxId])
+  @@index([duplicateType])
+}
+
+model IntegrationJob {
+  id          Int             @id @default(autoincrement())
+  fileId      Int
+  jobType     String          @db.VarChar(30)
+  jobStatus   String          @default("PENDING") @db.VarChar(20)
+  attempt     Int             @default(0)
+  maxAttempts Int             @default(5)
+  lockedBy    String?         @db.VarChar(50)
+  lockedAt    DateTime?
+  lastError   String?         @db.Text
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  file        IntegrationFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([jobType])
+  @@index([jobStatus])
+}
+
+// Bank Statement (for JAN/BANK reconciliation - MT940, CSV from banks)
+model BankStatementFile {
+  id           Int       @id @default(autoincrement())
+  bankCode     String    @db.VarChar(20)
+  bankName     String    @db.VarChar(100)
+  accountNo    String    @db.VarChar(30)
+  statementDate DateTime @db.Date
+  importedAt   DateTime  @default(now())
+  importedBy   String    @default("SYSTEM") @db.VarChar(50)
+  transactions BankStatementTransaction[]
+
+  @@index([bankCode, statementDate])
+}
+
+model BankStatementTransaction {
+  id               Int       @id @default(autoincrement())
+  fileId           Int
+  paymentReference String?   @db.VarChar(80)
+  approvalCode     String?   @db.VarChar(50)
+  chequeNo         String?   @db.VarChar(20)
+  valueDate        DateTime  @db.Date
+  amount           Decimal   @db.Decimal(18, 2)
+  description      String?   @db.VarChar(255)
+  counterparty     String?   @db.VarChar(150)
+  createdAt        DateTime  @default(now())
+  file             BankStatementFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
+  @@index([paymentReference])
+  @@index([valueDate, amount])
+}
+
+model ReconciliationResult {
+  id              Int                    @id @default(autoincrement())
+  stagingTxId     Int
+  internalTxId    String?                @db.VarChar(80)
+  matchStatus     ReconciliationMatchStatus
+  matchRule       String?                @db.VarChar(50)
+  confidenceScore Decimal?               @db.Decimal(5, 2)
+  exceptionCode   String?                 @db.VarChar(30)
+  exceptionDetail String?                @db.Text
+  createdAt       DateTime               @default(now())
+  stagingTx       IntegrationStagingTx   @relation(fields: [stagingTxId], references: [id], onDelete: Cascade)
+  actions         ReconciliationAction[]
+  matchLinks      ReconciliationMatchLink[]
+
+  @@index([stagingTxId])
+  @@index([matchStatus])
+}
+
+model ReconciliationMatchLink {
+  id              Int       @id @default(autoincrement())
+  reconResultId   Int
+  internalTxId    String    @db.VarChar(80)
+  amountAllocated Decimal?  @db.Decimal(18, 2)
+  createdAt       DateTime  @default(now())
+  reconResult     ReconciliationResult @relation(fields: [reconResultId], references: [id], onDelete: Cascade)
+
+  @@unique([reconResultId, internalTxId])
+  @@index([internalTxId])
+}
+
+model ReconciliationAction {
+  id         Int                  @id @default(autoincrement())
+  reconId    Int
+  actionType String               @db.VarChar(30)
+  actionNote String?              @db.Text
+  actedBy    String               @db.VarChar(50)
+  actedAt    DateTime             @default(now())
+  recon      ReconciliationResult @relation(fields: [reconId], references: [id], onDelete: Cascade)
+
+  @@index([reconId])
+  @@index([actionType])
+}
+
+model IntegrationConfig {
+  id            Int                @id @default(autoincrement())
+  sourceId      Int?
+  configKey     String             @db.VarChar(80)
+  configValue   String             @db.Text
+  isSecret      Boolean            @default(false)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  updatedBy     String?            @default("SYSTEM") @db.VarChar(50)
+  updatedAt     DateTime           @updatedAt
+  source        IntegrationSource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@index([configKey])
+}

@@ -6,6 +6,7 @@ import { Bell, Check, ChevronDown, LogOut, Settings, Shield } from "lucide-vue-n
 import type { ThemeColor } from "@/types";
 import { useSidebarCollapse } from "@/composables/useSidebarCollapse";
 
+import { usePendingActions } from "@/composables/usePendingActions";
 import { useAuthStore } from "@/stores/auth";
 import { useMenuStore } from "@/stores/menu";
 import { useSiteStore } from "@/stores/site";
@@ -19,6 +20,14 @@ const menuStore = useMenuStore();
 const site = useSiteStore();
 const uiTheme = useUiThemeStore();
 const { isCollapsed, toggle: toggleSidebar } = useSidebarCollapse();
+const { pendingByItemId, pendingByRoute, refresh: refreshPending } = usePendingActions();
+
+function hasPendingForItem(item: { id: string; to?: string; children?: { to: string }[] }) {
+  if (pendingByItemId.value[item.id]) return true;
+  if (item.to && pendingByRoute.value[item.to]) return true;
+  if (item.children?.some((c) => pendingByRoute.value[c.to])) return true;
+  return false;
+}
 
 const settingsOpen = ref(false);
 const settingsDropdownRef = ref<HTMLElement | null>(null);
@@ -131,6 +140,15 @@ function syncOpenMenus() {
 }
 
 watch(() => route.path, syncOpenMenus, { immediate: true });
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path.startsWith("/spg/payments") || path.startsWith("/duplicates") || path.startsWith("/integration/3rd-party/batch-processing") || path.startsWith("/integration/3rd-party/exceptions")) {
+      refreshPending();
+    }
+  },
+);
 </script>
 
 <template>
@@ -287,6 +305,7 @@ watch(() => route.path, syncOpenMenus, { immediate: true });
                 ]"
                 @click="isCollapsed ? toggleSidebar() : toggleMenu(item.id)"
               >
+                <span v-if="hasPendingForItem(item)" class="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 shrink-0 rounded-full bg-red-500" :class="isCollapsed ? 'md:left-1/2 md:-translate-x-1/2' : ''" />
                 <component
                   :is="item.icon"
                   class="shrink-0 transition-colors"
@@ -318,6 +337,7 @@ watch(() => route.path, syncOpenMenus, { immediate: true });
                   isCollapsed ? '' : itemClass(item.to, true)
                 ]"
               >
+                <span v-if="hasPendingForItem(item)" class="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 shrink-0 rounded-full bg-red-500" :class="isCollapsed ? 'md:left-1/2 md:-translate-x-1/2' : ''" />
                 <component
                   :is="item.icon"
                   class="shrink-0 transition-colors"
@@ -343,9 +363,10 @@ watch(() => route.path, syncOpenMenus, { immediate: true });
                   v-for="child in item.children"
                   :key="child.to"
                   :to="child.to"
-                  class="block rounded-md px-3 py-1 text-sm transition-all hover:bg-[var(--accent-50)]"
+                  class="relative flex items-center gap-2 rounded-md px-3 py-1 text-sm transition-all hover:bg-[var(--accent-50)]"
                   :class="childClass(child.to)"
                 >
+                  <span v-if="pendingByRoute[child.to]" class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
                   {{ child.label }}
                 </router-link>
               </div>

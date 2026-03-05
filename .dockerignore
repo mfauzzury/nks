@@ -1,3 +1,15 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+apps/*/dist
+*.tsbuildinfo
+.DS_Store
+Docs
 # Dependencies
 node_modules
 apps/*/node_modules
