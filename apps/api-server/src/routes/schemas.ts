@@ -351,29 +351,6 @@ export const paymentGatewaysSchema = z.object({
   ).default([]),
 });
 
-export const sourceCategoriesSchema = z.object({
-  categories: z.array(
-    z.object({
-      code: z.string().trim().min(1),
-      name: z.string().trim().min(1),
-      isActive: z.boolean().default(true),
-      notes: z.string().optional(),
-    }),
-  ).default([]),
-});
-
-export const sourceDataSchema = z.object({
-  items: z.array(
-    z.object({
-      code: z.string().trim().min(1),
-      name: z.string().trim().min(1),
-      categoryCode: z.string().trim().min(1),
-      isActive: z.boolean().default(true),
-      notes: z.string().optional(),
-    }),
-  ).default([]),
-});
-
 export const counterPaymentCreateSchema = z
   .object({
     guestName: z.string().trim().min(1),

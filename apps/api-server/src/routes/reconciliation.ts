@@ -1,5 +1,4 @@
-import pkg from "@prisma/client";
-const { BankStatementMatchStatus, CounterDepositStatus, CounterReconStatus, ReconciliationCaseStatus, ReconciliationCaseType } = pkg;
+import { BankStatementMatchStatus, CounterDepositStatus, CounterReconStatus, ReconciliationCaseStatus, ReconciliationCaseType } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 
