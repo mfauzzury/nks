@@ -1,5 +1,4 @@
-import pkg from "@prisma/client";
-const { ReconciliationMatchStatus } = pkg;
+import { ReconciliationMatchStatus } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../prisma.js";
 
