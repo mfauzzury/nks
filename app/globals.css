@@ -185,6 +185,21 @@
   50% { transform: translateY(-10px); }
 }
 
+/* Performance guard for portal:
+   large blurred layers animated continuously can cause jank on lower-end devices. */
+.portal-orb-1,
+.portal-orb-2 {
+  filter: blur(32px);
+  will-change: transform;
+}
+
+.animate-\[float_9s_ease-in-out_infinite\],
+.animate-\[float_10s_ease-in-out_infinite\],
+.animate-\[float_11s_ease-in-out_infinite\],
+.animate-\[float_12s_ease-in-out_infinite\] {
+  animation: none !important;
+}
+
 @keyframes chatbot-attention {
   0%, 100% {
     transform: translateY(0) scale(1);
