@@ -160,7 +160,7 @@ export default function IndividualRegisterPage() {
             <h1 className="text-xl font-semibold text-white">Pendaftaran Berjaya!</h1>
             <p className="text-sm text-purple-100">{message}</p>
             <p className="text-sm text-purple-200/70">Anda kini boleh log masuk ke portal pembayar.</p>
-            <Button asChild className="mt-4 h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
+            <Button asChild className="mt-4 h-12 rounded-xl portal-btn-primary px-8 text-base font-semibold shadow-lg ">
               <Link href="/portal/login">Log Masuk</Link>
             </Button>
           </div>
@@ -324,7 +324,7 @@ export default function IndividualRegisterPage() {
         ) : null}
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading || !canSubmit} className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
+          <Button type="submit" disabled={loading || !canSubmit} className="h-12 rounded-xl portal-btn-primary px-8 text-base font-semibold shadow-lg ">
             {loading ? "Menyimpan..." : isExistingIndividual ? "Simpan Perubahan" : "Daftar Sekarang"}
           </Button>
         </div>

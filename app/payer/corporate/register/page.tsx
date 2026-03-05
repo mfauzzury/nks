@@ -200,7 +200,7 @@ export default function CorporateRegisterPage() {
         </Card>
 
         <div className="flex items-center justify-end gap-3">
-          <Button type="submit" disabled={loading} className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
+          <Button type="submit" disabled={loading} className="h-12 rounded-xl portal-btn-primary px-8 text-base font-semibold shadow-lg ">
             {loading ? "Menyimpan..." : isLoggedIn ? "Hantar Kemaskini" : "Hantar Pendaftaran"}
           </Button>
         </div>

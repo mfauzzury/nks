@@ -259,7 +259,7 @@ watch(
 
     <div class="flex flex-col md:flex-row">
       <aside
-        class="relative flex flex-col border-r border-slate-200 bg-slate-50/50 transition-[width] duration-300 ease-in-out md:sticky md:top-0 md:h-[calc(100vh-40px)]"
+        class="relative border-r border-slate-200 bg-slate-50/50 transition-[width] duration-300 ease-in-out"
         :class="isCollapsed ? 'w-full md:w-14' : 'w-full md:w-64'"
       >
         <button
@@ -283,7 +283,7 @@ watch(
           </div>
         </div>
 
-        <nav class="flex-1 p-3" :class="isCollapsed ? 'md:overflow-visible md:px-0 md:py-2' : 'overflow-y-auto'">
+        <nav class="p-3" :class="isCollapsed ? 'md:overflow-visible md:px-0 md:py-2' : ''">
           <div v-for="(group, gi) in menuStore.resolvedMenu" :key="group.id">
             <p
               v-if="group.label"

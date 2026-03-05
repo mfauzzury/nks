@@ -30,7 +30,7 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-const PIE_COLORS = ["#7E30E1", "#E26EE5", "#49108B", "#a855f7", "#c084fc", "#d8b4fe", "#9333ea", "#7c3aed", "#a78bfa", "#8b5cf6"];
+const PIE_COLORS = ["#FFEC00", "#0F7FFF", "#183DE4", "#07137f", "#000957", "#3A63FF", "#2A4ED9", "#8FB6FF"];
 
 function extractZakatType(method: string) {
   const parts = method.split("|").map((v) => v.trim()).filter(Boolean);
@@ -160,7 +160,7 @@ export default function IndividualRecordsPage() {
           <section className="rounded-2xl border border-white/20 bg-white/12 p-6 backdrop-blur-md">
             <p className="text-sm text-purple-100">Akses rekod memerlukan sesi portal individu yang sah.</p>
             <div className="mt-4">
-              <Link href="/portal/login" className="rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-6 py-3 text-sm font-semibold text-white shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
+              <Link href="/portal/login" className="rounded-xl portal-btn-primary px-6 py-3 text-sm font-semibold portal-text-accent shadow-lg ">
                 Log Masuk
               </Link>
             </div>
@@ -203,15 +203,15 @@ export default function IndividualRecordsPage() {
         <section className="grid gap-4 md:grid-cols-3">
           <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
             <p className="text-sm text-purple-100">Jumlah Transaksi</p>
-            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">{loading ? "..." : totalTransactions}</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : totalTransactions}</p>
           </article>
           <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
             <p className="text-sm text-purple-100">Jumlah Sumbangan</p>
-            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">{loading ? "..." : formatCurrency(filteredTotalAmount)}</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : formatCurrency(filteredTotalAmount)}</p>
           </article>
           <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
             <p className="text-sm text-purple-100">Resit Terkini</p>
-            <p className="mt-2 text-base font-semibold text-[#1CEC72]">{loading ? "..." : latestReceipt}</p>
+            <p className="mt-2 text-base font-semibold text-white">{loading ? "..." : latestReceipt}</p>
             <p className="mt-1 text-xs text-purple-200/70">{filteredLatestPaidAt ? formatDate(filteredLatestPaidAt) : "-"}</p>
           </article>
         </section>
@@ -233,7 +233,7 @@ export default function IndividualRecordsPage() {
                     </Pie>
                     <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={{ borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.8125rem", background: "rgba(73,16,139,0.9)", color: "#fff" }}
+                      contentStyle={{ borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.8125rem", background: "rgba(0, 9, 87, 0.92)", color: "#fff" }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -245,7 +245,7 @@ export default function IndividualRecordsPage() {
                     <div key={item.name} className="flex items-center gap-3 text-sm">
                       <span className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                       <span className="flex-1 text-purple-100">{item.name}</span>
-                      <span className="font-medium text-[#1CEC72]">{formatCurrency(item.value)}</span>
+                      <span className="font-medium text-white">{formatCurrency(item.value)}</span>
                       <span className="w-12 text-right text-xs text-purple-200/60">{pct}%</span>
                     </div>
                   );
@@ -258,14 +258,14 @@ export default function IndividualRecordsPage() {
         <section className="rounded-2xl border border-white/20 portal-card p-6 shadow-md">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <ReceiptText className="h-5 w-5 text-[#7E30E1]" />
+              <ReceiptText className="h-5 w-5 portal-text-accent" />
               <h2 className="text-base font-semibold text-slate-900">Senarai Transaksi</h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={filterZakat}
                 onChange={(e) => setFilterZakat(e.target.value)}
-                className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-sm text-slate-700 focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
+                className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-sm text-slate-700 portal-focus"
               >
                 <option value="">Semua Jenis Zakat</option>
                 {zakatOptions.map((opt) => (
@@ -275,7 +275,7 @@ export default function IndividualRecordsPage() {
               <select
                 value={filterMethod}
                 onChange={(e) => setFilterMethod(e.target.value)}
-                className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-sm text-slate-700 focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
+                className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-sm text-slate-700 portal-focus"
               >
                 <option value="">Semua Kaedah</option>
                 {methodOptions.map((opt) => (
@@ -326,7 +326,7 @@ export default function IndividualRecordsPage() {
                             type="button"
                             title="Lihat Resit"
                             onClick={() => openReceipt(row)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-[#7E30E1]"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 portal-hover-text-secondary"
                           >
                             <Eye className="h-4 w-4" />
                           </button>
@@ -379,7 +379,7 @@ export default function IndividualRecordsPage() {
             <>
               <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 text-[#7E30E1]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg portal-bg-accent-soft-strong portal-text-accent">
                     <ReceiptText className="h-4.5 w-4.5" />
                   </div>
                   <div>
@@ -453,7 +453,7 @@ export default function IndividualRecordsPage() {
                       paidAt: selectedTx.paidAt,
                     })
                   }
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#7E30E1] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#6b28c0]"
+                  className="inline-flex items-center gap-2 rounded-lg portal-btn-primary px-4 py-2 text-sm font-medium portal-text-accent transition "
                 >
                   <Download className="h-4 w-4" />
                   Muat Turun PDF

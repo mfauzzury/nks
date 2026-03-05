@@ -77,7 +77,7 @@ export default function IndividualPaySuccessPage() {
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-2">
-                  <ReceiptText className="h-5 w-5 text-[#7E30E1]" />
+                  <ReceiptText className="h-5 w-5 portal-text-accent" />
                   <h2 className="text-lg font-bold text-slate-900">Resit Bayaran</h2>
                 </div>
                 <div className="flex items-center gap-2">
@@ -176,7 +176,7 @@ export default function IndividualPaySuccessPage() {
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link href="/payer/individual/register">
-                    <Button className="gap-2 bg-white text-[#7E30E1] hover:bg-white/90">
+                    <Button className="gap-2 portal-btn-primary ">
                       <UserPlus2 className="h-4 w-4" />
                       Daftar Individu
                     </Button>

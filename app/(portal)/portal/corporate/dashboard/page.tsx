@@ -11,7 +11,7 @@ import { getTransactionsByIdentity, type IdentityTransactionsResult } from "@/li
 
 type Tx = IdentityTransactionsResult["data"]["transactions"][number];
 
-const PIE_COLORS = ["#7E30E1", "#E26EE5", "#49108B", "#a855f7", "#c084fc", "#d8b4fe", "#9333ea", "#7c3aed"];
+const PIE_COLORS = ["#FFEC00", "#0F7FFF", "#183DE4", "#07137f", "#000957", "#3A63FF", "#2A4ED9", "#8FB6FF"];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(value);
@@ -91,7 +91,7 @@ export default function CorporateDashboardPage() {
                 <p className="text-sm font-medium text-purple-100">Jumlah Transaksi</p>
                 <FileText className="h-4 w-4 text-purple-200" />
               </div>
-              <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">{loading ? "..." : rows.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : rows.length}</p>
               <p className="mt-1 text-sm text-purple-200/70">Semua pembayaran zakat syarikat</p>
             </article>
             <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
@@ -99,7 +99,7 @@ export default function CorporateDashboardPage() {
                 <p className="text-sm font-medium text-purple-100">Jumlah Sumbangan</p>
                 <CreditCard className="h-4 w-4 text-purple-200" />
               </div>
-              <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">{loading ? "..." : formatCurrency(totalAmount)}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{loading ? "..." : formatCurrency(totalAmount)}</p>
               <p className="mt-1 text-sm text-purple-200/70">Keseluruhan bayaran</p>
             </article>
             <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">
@@ -107,7 +107,7 @@ export default function CorporateDashboardPage() {
                 <p className="text-sm font-medium text-purple-100">Status Syarikat</p>
                 <Building2 className="h-4 w-4 text-purple-200" />
               </div>
-              <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">Aktif</p>
+              <p className="mt-2 text-2xl font-semibold text-white">Aktif</p>
               <p className="mt-1 text-sm text-purple-200/70">Profil lengkap dan sah</p>
             </article>
           </section>
@@ -132,7 +132,7 @@ export default function CorporateDashboardPage() {
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.8125rem", background: "rgba(73,16,139,0.9)", color: "#fff" }} />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.8125rem", background: "rgba(0, 9, 87, 0.92)", color: "#fff" }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -143,7 +143,7 @@ export default function CorporateDashboardPage() {
                         <div key={item.name} className="flex items-center gap-2 text-xs">
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                           <span className="flex-1 text-purple-100">{item.name}</span>
-                          <span className="font-medium text-[#1CEC72]">{formatCurrency(item.value)}</span>
+                          <span className="font-medium text-white">{formatCurrency(item.value)}</span>
                           <span className="w-10 text-right text-purple-200/60">{pct}%</span>
                         </div>
                       );
@@ -170,7 +170,7 @@ export default function CorporateDashboardPage() {
                         <p className="text-sm font-medium text-white">{extractZakatType(tx.paymentMethod)}</p>
                         <p className="text-xs text-purple-200/70">{tx.receiptNo} &middot; {formatDate(tx.paidAt)}</p>
                       </div>
-                      <p className="text-sm font-semibold text-[#1CEC72]">{formatCurrency(Number(tx.amount))}</p>
+                      <p className="text-sm font-semibold text-white">{formatCurrency(Number(tx.amount))}</p>
                     </div>
                   ))}
                 </div>

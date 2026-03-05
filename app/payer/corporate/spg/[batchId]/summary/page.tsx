@@ -70,7 +70,7 @@ export default function SpgBatchSummaryPage() {
         <div>
           <Link
             href="/payer/corporate/spg"
-            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-[#7E30E1]"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition portal-hover-text-secondary"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Kembali ke Dashboard SPG
