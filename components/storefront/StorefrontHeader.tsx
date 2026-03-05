@@ -32,7 +32,7 @@ export function StorefrontHeader({
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-3">
           <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border-2 border-[#7E30E1] text-xs font-bold text-[#7E30E1]">SK</span>
-          <span className="text-[18px] font-bold tracking-tight text-slate-800">SenangKutip</span>
+          <span className="text-[18px] font-bold tracking-tight text-slate-800">SenangKutipan</span>
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">

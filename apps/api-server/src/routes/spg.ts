@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { SpgPayrollBatchStatus, SpgPayrollPaymentChannel } from "@prisma/client";
+import pkg from "@prisma/client";
+const { SpgPayrollBatchStatus, SpgPayrollPaymentChannel } = pkg;
 import { Router } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";

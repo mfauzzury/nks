@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { IntegrationFileType } from "@prisma/client";
+import pkg from "@prisma/client";
+const { IntegrationFileType } = pkg;
 import { Router } from "express";
 import multer from "multer";
 

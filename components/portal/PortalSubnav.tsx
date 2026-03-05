@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Home, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Tooltip } from "@/components/ui/tooltip";
 import { clearPortalSession, type PortalSession } from "@/lib/portal-session";
 
 const navByRole = {
@@ -48,10 +47,10 @@ export function PortalSubnav({
   return (
     <div className="w-full pb-3">
       <div className="flex w-full flex-wrap items-center justify-between gap-3 px-0 py-0">
-        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+        <div className="flex flex-wrap items-center gap-2">
           <span className={cn("inline-flex items-center gap-2 whitespace-nowrap px-1 py-2 text-[18px] font-bold tracking-tight", variant === "onDark" ? "text-white" : "text-slate-800")}>
             <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border-2 border-white text-xs font-bold text-white">SK</span>
-            SenangKutip
+            SenangKutipan
           </span>
           <span className={cn("ml-2.5 h-5 w-px shrink-0", variant === "onDark" ? "bg-white/30" : "bg-slate-300")} />
           <Link
@@ -76,7 +75,7 @@ export function PortalSubnav({
                 className={cn(
                   "whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition",
                   active
-                    ? "bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] text-white shadow-[0_0_14px_rgba(226,110,229,0.34)]"
+                    ? "portal-btn-primary shadow-[0_0_14px_rgba(255,236,0,0.35)]"
                     : variant === "onDark"
                       ? "text-white/85 hover:bg-white/15 hover:text-white"
                       : "text-slate-600 hover:bg-cyan-100/50 hover:text-slate-900",

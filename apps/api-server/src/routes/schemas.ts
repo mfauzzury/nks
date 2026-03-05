@@ -372,6 +372,8 @@ export const sourceDataSchema = z.object({
       notes: z.string().optional(),
     }),
   ).default([]),
+});
+
 export const counterPaymentCreateSchema = z
   .object({
     guestName: z.string().trim().min(1),
