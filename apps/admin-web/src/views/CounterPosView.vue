@@ -349,9 +349,9 @@ onMounted(async () => {
 <template>
   <div class="pos-bg relative flex min-h-screen flex-col overflow-hidden">
     <!-- Decorative shapes -->
-    <div class="pointer-events-none absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-pink-400/20 blur-3xl" />
-    <div class="pointer-events-none absolute -bottom-32 -right-32 h-[400px] w-[400px] rounded-full bg-blue-400/20 blur-3xl" />
-    <div class="pointer-events-none absolute left-1/2 top-1/3 h-[300px] w-[300px] -translate-x-1/2 rounded-full bg-purple-300/15 blur-3xl" />
+    <div class="pointer-events-none absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-[#0F7FFF]/20 blur-3xl" />
+    <div class="pointer-events-none absolute -bottom-32 -right-32 h-[400px] w-[400px] rounded-full bg-[#FFEC00]/25 blur-3xl" />
+    <div class="pointer-events-none absolute left-1/2 top-1/3 h-[300px] w-[300px] -translate-x-1/2 rounded-full bg-[#183DE4]/20 blur-3xl" />
 
     <!-- POS Header -->
     <header
@@ -372,7 +372,7 @@ onMounted(async () => {
               i < stepIndex
                 ? 'bg-emerald-400 text-white'
                 : i === stepIndex
-                  ? 'bg-white text-blue-700 shadow-lg'
+                  ? 'bg-[#FFEC00] text-[#000957] shadow-lg'
                   : 'bg-white/20 text-white/60'
             "
           >
@@ -853,7 +853,12 @@ onMounted(async () => {
 
 <style scoped>
 .pos-bg {
-  background: linear-gradient(to bottom right, #1a0538, #49108B, #7E30E1);
+  background:
+    radial-gradient(640px 320px at 84% 16%, rgba(255, 236, 0, 0.3), transparent 64%),
+    radial-gradient(440px 220px at 74% 82%, rgba(255, 236, 0, 0.2), transparent 72%),
+    radial-gradient(1200px 520px at 8% -12%, rgba(15, 127, 255, 0.14), transparent 58%),
+    radial-gradient(900px 420px at 92% -10%, rgba(24, 61, 228, 0.24), transparent 52%),
+    linear-gradient(145deg, #000957 0%, #07137f 44%, #183DE4 74%, #0F7FFF 96%, #FFEC00 100%);
 }
 .processing-spinner {
   animation: spin 1s linear infinite;

@@ -87,7 +87,7 @@ export default function CorporateZakatPage() {
           <div className="relative rounded-2xl border border-white/20 bg-white/12 p-5 shadow-sm backdrop-blur-md">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7E30E1]/10 text-[#7E30E1]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl portal-bg-accent-soft portal-text-secondary">
                   <Building2 className="h-5 w-5" />
                 </div>
                 <div>
@@ -210,7 +210,7 @@ export default function CorporateZakatPage() {
             </Card>
 
             <div className="flex items-center justify-end gap-3">
-              <Button type="submit" disabled={loading} className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0]">
+              <Button type="submit" disabled={loading} className="h-12 rounded-xl portal-btn-primary px-8 text-base font-semibold shadow-lg ">
                 {loading ? "Memproses..." : "Buat Bayaran"}
               </Button>
             </div>
