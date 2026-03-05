@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus } from "@prisma/client";
+import pkg from "@prisma/client";
+const { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus } = pkg;
 import { Router } from "express";
 import multer from "multer";
 

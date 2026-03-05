@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { GuestPaymentSource } from "@prisma/client";
+import pkg from "@prisma/client";
+const { GuestPaymentSource } = pkg;
 
 import { prisma } from "../prisma.js";
 import { sendError, sendOk } from "../utils/responses.js";
