@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getPortalSession, resolvePortalDashboard, type PortalSession } from "@/lib/portal-session";
+import { resolvePortalDashboard } from "@/lib/portal-session";
+import { usePortalSession } from "@/lib/use-portal-session";
 
 export function PortalAuthGuard({
   children,
@@ -12,7 +13,7 @@ export function PortalAuthGuard({
   expected: "individu" | "corporate";
 }) {
   const router = useRouter();
-  const session: PortalSession | null = getPortalSession();
+  const session = usePortalSession();
 
   useEffect(() => {
     if (!session) {

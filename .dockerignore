@@ -10,3 +10,35 @@ apps/*/dist
 *.tsbuildinfo
 .DS_Store
 Docs
+# Dependencies
+node_modules
+apps/*/node_modules
+**/node_modules
+
+# Build outputs
+.next
+apps/*/dist
+*.tsbuildinfo
+
+# Git and IDE
+.git
+.gitignore
+.dockerignore
+.DS_Store
+*.md
+.claude
+
+# Env and secrets (set at runtime)
+apps/api-server/.env
+apps/api-server/.env.*
+apps/admin-web/.env
+apps/admin-web/.env.*
+
+# Local DB and uploads
+apps/api-server/prisma/dev.db
+apps/api-server/prisma/dev.db-journal
+apps/api-server/uploads
+
+# Logs and debug
+npm-debug.log*
+*.log

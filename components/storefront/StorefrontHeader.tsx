@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { type PortalSession } from "@/lib/portal-session";
+import { PortalEntryButton } from "@/components/storefront/PortalEntryButton";
 
 type NavVariant = "public" | "portal";
 
@@ -27,14 +28,11 @@ export function StorefrontHeader({
   );
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-purple-200/70 bg-[#f8fcff]/85 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1f4ed8] text-sm font-bold text-white">NKS</div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">NKS Digital Zakat</p>
-            <p className="text-xs text-slate-500">Portal Pembayar</p>
-          </div>
+          <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border-2 border-[#7E30E1] text-xs font-bold text-[#7E30E1]">SK</span>
+          <span className="text-[18px] font-bold tracking-tight text-slate-800">SenangKutip</span>
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
@@ -44,7 +42,7 @@ export function StorefrontHeader({
               <Link
                 key={item.href}
                 href={item.href}
-                className={active ? "text-[#1f4ed8]" : "hover:text-slate-900"}
+                className={active ? "text-[#7E30E1] drop-shadow-[0_0_8px_rgba(126,48,225,0.35)]" : "hover:text-slate-900"}
               >
                 {item.label}
               </Link>
@@ -52,7 +50,7 @@ export function StorefrontHeader({
           })}
 
           {!isPortal ? (
-            <Link href="/portal/login" className="rounded-lg bg-[#1f4ed8] px-4 py-2 text-white transition hover:bg-[#1a42ba]">Log Masuk</Link>
+            <PortalEntryButton className="rounded-lg bg-linear-to-r from-[#E26EE5] to-[#7E30E1] px-4 py-2 text-white shadow-[0_0_12px_rgba(126,48,225,0.3)] transition hover:brightness-105" />
           ) : null}
         </nav>
 
@@ -68,7 +66,7 @@ export function StorefrontHeader({
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-slate-200 bg-white md:hidden">
+        <div className="border-t border-purple-100 bg-[#f8fcff] md:hidden">
           <div className="mx-auto grid w-full max-w-6xl gap-1 px-6 py-3">
             {menuLinks.map((item) => {
               const active = pathname === item.href;
@@ -78,7 +76,7 @@ export function StorefrontHeader({
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-                    active ? "bg-[#1f4ed8] text-white" : "text-slate-700 hover:bg-slate-100"
+                    active ? "bg-linear-to-r from-[#E26EE5] to-[#7E30E1] text-white shadow-[0_0_14px_rgba(226,110,229,0.34)]" : "text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   {item.label}
@@ -87,13 +85,10 @@ export function StorefrontHeader({
             })}
 
             {!isPortal ? (
-              <Link
-                href="/portal/login"
+              <PortalEntryButton
                 onClick={() => setMobileOpen(false)}
-                className="mt-2 rounded-lg bg-[#1f4ed8] px-3 py-2 text-center text-sm font-semibold text-white"
-              >
-                Log Masuk
-              </Link>
+                className="mt-2 rounded-lg bg-linear-to-r from-[#E26EE5] to-[#7E30E1] px-3 py-2 text-center text-sm font-semibold text-white shadow-[0_0_12px_rgba(126,48,225,0.3)]"
+              />
             ) : null}
           </div>
         </div>

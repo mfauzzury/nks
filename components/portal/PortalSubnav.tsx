@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Home, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/tooltip";
 import { clearPortalSession, type PortalSession } from "@/lib/portal-session";
 
 const navByRole = {
@@ -25,9 +26,11 @@ const navByRole = {
 export function PortalSubnav({
   role,
   session,
+  variant = "default",
 }: {
   role: "individu" | "corporate";
   session: PortalSession | null;
+  variant?: "default" | "onDark";
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -43,45 +46,68 @@ export function PortalSubnav({
   }
 
   return (
-    <div className="border-b border-slate-200 bg-white/90">
-      <div className="mx-auto w-full max-w-6xl px-6 py-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar">
-            {items.map((item) => {
-              const active = isActivePath(item.href);
-              return (
-                <Link
-                  key={`${item.href}-${item.label}`}
-                  href={item.href}
-                  className={cn(
-                    "whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition",
-                    active
-                      ? "bg-[#1f4ed8] text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-          {session ? (
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <p className="text-xs font-semibold text-slate-800">{session.displayName}</p>
-                <p className="text-[11px] text-slate-500">{session.payerCode}</p>
-              </div>
-              <button
-                type="button"
-                onClick={onLogout}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+    <div className="w-full pb-3">
+      <div className="flex w-full flex-wrap items-center justify-between gap-3 px-0 py-0">
+        <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar">
+          <span className={cn("inline-flex items-center gap-2 whitespace-nowrap px-1 py-2 text-[18px] font-bold tracking-tight", variant === "onDark" ? "text-white" : "text-slate-800")}>
+            <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border-2 border-white text-xs font-bold text-white">SK</span>
+            SenangKutip
+          </span>
+          <span className={cn("ml-2.5 h-5 w-px shrink-0", variant === "onDark" ? "bg-white/30" : "bg-slate-300")} />
+          <Link
+            href="/"
+            title="Back to Main"
+            className={cn(
+              "inline-flex items-center whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium transition",
+              variant === "onDark"
+                ? "text-white/85 hover:bg-white/15 hover:text-white"
+                : "text-slate-600 hover:bg-cyan-100/50 hover:text-slate-900",
+            )}
+          >
+            <Home className="h-4 w-4" />
+          </Link>
+          <span className={cn("h-5 w-px shrink-0", variant === "onDark" ? "bg-white/30" : "bg-slate-300")} />
+          {items.map((item) => {
+            const active = isActivePath(item.href);
+            return (
+              <Link
+                key={`${item.href}-${item.label}`}
+                href={item.href}
+                className={cn(
+                  "whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition",
+                  active
+                    ? "bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] text-white shadow-[0_0_14px_rgba(226,110,229,0.34)]"
+                    : variant === "onDark"
+                      ? "text-white/85 hover:bg-white/15 hover:text-white"
+                      : "text-slate-600 hover:bg-cyan-100/50 hover:text-slate-900",
+                )}
               >
-                <LogOut className="h-4 w-4" />
-                Log Keluar
-              </button>
-            </div>
-          ) : null}
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
+        {session ? (
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <p className={cn("text-xs font-semibold", variant === "onDark" ? "text-white" : "text-slate-800")}>{session.displayName}</p>
+              <p className={cn("text-[11px]", variant === "onDark" ? "text-white/70" : "text-slate-500")}>{session.payerCode}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
+                variant === "onDark"
+                  ? "border border-white/40 bg-transparent text-white hover:bg-white/15"
+                  : "border border-cyan-200/80 bg-transparent text-slate-700 hover:bg-cyan-100/50",
+              )}
+            >
+              <LogOut className="h-4 w-4" />
+              Log Keluar
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

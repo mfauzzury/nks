@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { PayerType } from "@prisma/client";
+import { GuestPaymentSource, PayerType } from "@prisma/client";
 import { Router } from "express";
 
 import { prisma } from "../prisma.js";
@@ -741,8 +741,8 @@ payersRouter.post("/corporate-zakat", async (req, res) => {
   const normalizedSsm = normalizeIdentity(input.ssmNo);
 
   const paymentMethodFull = input.zakatType
-    ? `${input.paymentMethod} | ${input.zakatType}`
-    : input.paymentMethod;
+    ? `${input.paymentMethod} | ${input.zakatType} | Tahun ${input.financialYear}`
+    : `${input.paymentMethod} | Tahun ${input.financialYear}`;
 
   const rand = Math.floor(Math.random() * 9000) + 1000;
   const receiptNo = `CRCPT-${Date.now()}-${rand}`;
@@ -756,6 +756,7 @@ payersRouter.post("/corporate-zakat", async (req, res) => {
       amount: input.amount,
       paymentMethod: paymentMethodFull,
       status: "success",
+      source: GuestPaymentSource.CORPORATE_DIRECT,
     },
   });
 

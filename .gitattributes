@@ -1,0 +1,3 @@
+# Ensure Docker files use LF so they commit and push correctly on all platforms
+Dockerfile text eol=lf
+.dockerignore text eol=lf

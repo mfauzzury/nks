@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   Menu,
   Settings,
+  Wallet,
 } from "lucide-vue-next";
 
 export type MenuChild = {
@@ -79,17 +80,28 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
           { label: "Daftar Baru", to: "/payers/corporate/new" },
         ],
       },
+    ],
+  },
+  {
+    id: "spg",
+    label: "Skim Potongan Gaji (SPG)",
+    items: [
       {
-        id: "pembayar-spg",
-        label: "Skim Potongan Gaji(SPG)",
+        id: "spg-majikan",
+        label: "Majikan SPG",
         to: "/payers/spg/list",
         icon: Users,
         permission: "users.view",
         children: [
           { label: "Senarai", to: "/payers/spg/list" },
           { label: "Daftar Baru", to: "/payers/spg/new" },
-          { label: "Semakan Bayaran", to: "/spg/payments/pending" },
         ],
+      },
+      {
+        id: "spg-semakan-bayaran",
+        label: "Semakan Bayaran",
+        to: "/spg/payments/pending",
+        icon: Wallet,
       },
     ],
   },
@@ -212,6 +224,12 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         icon: Users,
         permission: "integration.view",
       },
+    id: "kutipan-kaunter",
+    label: "Kutipan Kaunter",
+    items: [
+      { id: "counter-payments", label: "Senarai Kutipan", to: "/counter/payments", icon: Wallet },
+      { id: "counter-deposits", label: "Konsolidasi Bank-In", to: "/counter/deposits", icon: Wallet },
+      { id: "counter-reconciliation", label: "Rekonsiliasi Bank", to: "/counter/reconciliation", icon: Wallet },
     ],
   },
   {

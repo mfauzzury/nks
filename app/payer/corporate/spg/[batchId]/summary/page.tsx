@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Download, Printer } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, Download, Printer } from "lucide-react";
 import { callbackSpgOnlinePayment, getSpgBatchDetail } from "@/lib/payer-portal-api";
+import { usePortalSession } from "@/lib/use-portal-session";
 import { downloadSpgReferencePdf } from "@/lib/spg-receipt-pdf";
 import { PortalAuthGuard } from "@/components/portal/PortalAuthGuard";
+import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -17,6 +19,7 @@ function formatCurrency(value: number) {
 export default function SpgBatchSummaryPage() {
   const params = useParams<{ batchId: string }>();
   const router = useRouter();
+  const session = usePortalSession();
   const batchId = Number(params.batchId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -58,22 +61,34 @@ export default function SpgBatchSummaryPage() {
 
   return (
     <PortalAuthGuard expected="corporate">
-      <div className="space-y-6">
+      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] min-h-[calc(100vh-6rem)] w-screen overflow-hidden portal-cosmic-bg py-6 md:py-8">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full portal-orb-1 blur-3xl animate-[float_9s_ease-in-out_infinite]" />
+        <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl animate-[float_11s_ease-in-out_infinite]" />
+
+        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
+        {session && session.payerType !== "individu" ? <PortalSubnav role="corporate" session={session} variant="onDark" /> : null}
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Ringkasan Batch SPG</h1>
-          <p className="text-sm text-slate-600">Rujukan batch, status bayaran, dan senarai pekerja.</p>
+          <Link
+            href="/payer/corporate/spg"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-[#7E30E1]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Kembali ke Dashboard SPG
+          </Link>
+          <h1 className="text-xl font-semibold text-white">Ringkasan Batch SPG</h1>
+          <p className="text-sm text-purple-100">Rujukan batch, status bayaran, dan senarai pekerja.</p>
         </div>
 
         {message ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{message}</div> : null}
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
 
         {loading || !batch ? (
-          <Card>
+          <Card className="border-white/20 portal-card shadow-md">
             <CardContent className="py-6 text-sm text-slate-500">Memuatkan batch...</CardContent>
           </Card>
         ) : (
           <>
-            <Card>
+            <Card className="border-white/20 portal-card shadow-md">
               <CardHeader>
                 <CardTitle className="text-base">Maklumat Batch</CardTitle>
               </CardHeader>
@@ -125,9 +140,9 @@ export default function SpgBatchSummaryPage() {
             ) : null}
 
             {batch.status === "awaiting_online_payment" ? (
-              <Card className="border-blue-200 bg-blue-50">
+              <Card className="border-purple-200 bg-purple-50">
                 <CardContent className="space-y-3 p-5">
-                  <p className="text-sm text-blue-900">
+                  <p className="text-sm text-purple-900">
                     Menunggu bayaran online. Untuk fasa ini, gunakan simulasi callback.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -157,7 +172,7 @@ export default function SpgBatchSummaryPage() {
               </Card>
             ) : null}
 
-            <Card>
+            <Card className="border-white/20 portal-card shadow-md">
               <CardHeader>
                 <CardTitle className="text-base">Senarai Pekerja</CardTitle>
               </CardHeader>
@@ -188,6 +203,7 @@ export default function SpgBatchSummaryPage() {
             </Card>
           </>
         )}
+        </div>
       </div>
     </PortalAuthGuard>
   );

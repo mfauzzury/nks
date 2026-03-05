@@ -95,6 +95,11 @@ export const spgPayrollBatchStatusSchema = z.enum([
   "paid_failed",
   "cancelled",
 ]);
+export const counterPaymentChannelSchema = z.enum(["COUNTER_CASH", "COUNTER_CARD_TERMINAL", "COUNTER_CHEQUE", "COUNTER_DEBIT", "COUNTER_QR"]);
+export const counterReconStatusSchema = z.enum(["unbatched", "batched", "reconciled", "exception"]);
+export const counterDepositTypeSchema = z.enum(["CASH_BANKIN", "CARD_SETTLEMENT"]);
+export const counterDepositStatusSchema = z.enum(["draft", "submitted", "matched", "variance", "reconciled", "cancelled"]);
+export const reconciliationCaseStatusSchema = z.enum(["open", "investigating", "resolved", "rejected"]);
 
 export const payerListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -294,6 +299,7 @@ export const guestPaymentCreateSchema = z.object({
   email: z.string().email().optional(),
   amount: z.number().positive(),
   paymentMethod: z.string().min(1),
+  financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
 });
 
 export const corporateZakatPaymentSchema = z.object({
@@ -303,7 +309,7 @@ export const corporateZakatPaymentSchema = z.object({
   amount: z.number().positive(),
   paymentMethod: z.string().min(1),
   zakatType: z.string().optional(),
-  financialYear: z.string().optional(),
+  financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
 });
 
 export const zakatTypesSchema = z.object({
@@ -366,4 +372,87 @@ export const sourceDataSchema = z.object({
       notes: z.string().optional(),
     }),
   ).default([]),
+export const counterPaymentCreateSchema = z
+  .object({
+    guestName: z.string().trim().min(1),
+    identityNo: z.string().trim().min(3),
+    email: z.string().email().optional(),
+    phone: z.string().trim().optional(),
+    zakatType: z.string().trim().min(1),
+    financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
+    amount: z.number().positive(),
+    paymentChannel: counterPaymentChannelSchema,
+    collectionPoint: z.string().trim().min(1).max(120),
+    terminalRef: z
+      .object({
+        rrn: z.string().trim().min(1),
+        authCode: z.string().trim().min(1),
+        tid: z.string().trim().min(1),
+        mid: z.string().trim().min(1),
+      })
+      .optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.paymentChannel === "COUNTER_CARD_TERMINAL" && !value.terminalRef) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "terminalRef is required for COUNTER_CARD_TERMINAL",
+        path: ["terminalRef"],
+      });
+    }
+  });
+
+export const counterPaymentsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+  channel: counterPaymentChannelSchema.optional(),
+  reconStatus: counterReconStatusSchema.optional(),
+  collectionPoint: z.string().trim().optional(),
+  staffId: z.coerce.number().int().positive().optional(),
+  q: z.string().trim().optional(),
+});
+
+export const counterDepositCreateSchema = z.object({
+  depositType: counterDepositTypeSchema,
+  depositDate: z.string().datetime(),
+  collectionPoint: z.string().trim().optional(),
+  paymentIds: z.array(z.number().int().positive()).min(1),
+  declaredAmount: z.number().nonnegative(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export const counterDepositsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
+  status: counterDepositStatusSchema.optional(),
+  type: counterDepositTypeSchema.optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+  referenceNo: z.string().trim().optional(),
+});
+
+export const bankStatementUploadSchema = z.object({
+  bankAccountNo: z.string().trim().optional(),
+  statementDateFrom: z.string().datetime().optional(),
+  statementDateTo: z.string().datetime().optional(),
+});
+
+export const reconciliationRunSchema = z.object({
+  statementId: z.number().int().positive(),
+  dayTolerance: z.number().int().min(0).max(7).default(3),
+});
+
+export const reconciliationCasesQuerySchema = z.object({
+  status: reconciliationCaseStatusSchema.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(20),
+});
+
+export const reconciliationResolveSchema = z.object({
+  action: z.enum(["map_batch", "mark_bank_fee", "mark_reversal", "ignore"]),
+  batchId: z.number().int().positive().optional(),
+  reason: z.string().trim().optional(),
 });

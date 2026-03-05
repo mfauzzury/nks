@@ -67,6 +67,17 @@ body {
   @apply bg-slate-50 text-slate-900;
 }
 
+select {
+  background-color: #ffffff !important;
+  color: #0f172a;
+}
+
+select option,
+select optgroup {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
 @layer components {
   .page-title {
     @apply bg-clip-text text-[1.45rem] font-bold tracking-tight text-transparent;

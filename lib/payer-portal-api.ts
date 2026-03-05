@@ -148,7 +148,14 @@ export function submitProfileUpdateRequest(input: Record<string, unknown>) {
   });
 }
 
-export function createGuestPayment(input: Record<string, unknown>) {
+export function createGuestPayment(input: {
+  guestName: string;
+  identityNo: string;
+  email?: string;
+  amount: number;
+  paymentMethod: string;
+  financialYear: string;
+}) {
   return request<GuestPaymentResult>("/api/guest-payments", {
     method: "POST",
     body: JSON.stringify(input),
@@ -169,7 +176,15 @@ export function getPublicZakatTypes() {
 
 export type CorporateZakatResult = { data: { id: number; receiptNo: string; message: string } };
 
-export function payZakatCorporate(input: Record<string, unknown>) {
+export function payZakatCorporate(input: {
+  ssmNo: string;
+  companyName: string;
+  contactEmail?: string;
+  amount: number;
+  paymentMethod: string;
+  zakatType?: string;
+  financialYear: string;
+}) {
   return request<CorporateZakatResult>("/api/payers/corporate-zakat", {
     method: "POST",
     body: JSON.stringify(input),

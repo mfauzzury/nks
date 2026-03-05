@@ -139,6 +139,7 @@ settingsRouter.get("/zakat-types", async (req, res) => {
   const row = await prisma.setting.findUnique({ where: { key: "zakatTypes" } });
   const raw = row ? JSON.parse(row.value) : DEFAULT_ZAKAT_TYPES;
   const isPublic = !req.headers.authorization && !(req as unknown as Record<string, unknown>).auth;
+  const isPublic = !req.headers.authorization && !((req as unknown as Record<string, unknown>).auth);
   const types = Array.isArray(raw)
     ? raw.map((item: unknown, index: number) => {
       if (typeof item === "string") {

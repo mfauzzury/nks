@@ -45,7 +45,7 @@ export function PaymentChannels() {
     <section className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#2d4fc7]">Saluran Bayaran</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7E30E1]">Saluran Bayaran</p>
           <h2 className="mt-2 text-2xl font-semibold text-slate-900 md:text-3xl">Pilihan pembayaran zakat</h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
             Kandungan ini diringkaskan berdasarkan maklumat rasmi Lembaga Zakat Selangor untuk rujukan aliran bayaran.
@@ -55,7 +55,7 @@ export function PaymentChannels() {
           href="https://www.zakatselangor.com.my/bayar-zakat/"
           target="_blank"
           rel="noreferrer"
-          className="text-sm font-medium text-[#1f4ed8] hover:underline"
+          className="text-sm font-medium text-[#7E30E1] hover:underline"
         >
           Lihat halaman rujukan
         </a>
@@ -68,12 +68,12 @@ export function PaymentChannels() {
             href={item.href}
             target="_blank"
             rel="noreferrer"
-            className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-[#1f4ed8]/30 hover:bg-white hover:shadow-sm"
+            className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-[#7E30E1]/30 hover:bg-white hover:shadow-sm"
           >
-            <item.icon className="h-7 w-7 text-[#1f4ed8]" />
+            <item.icon className="h-7 w-7 text-[#7E30E1]" />
             <h3 className="mt-3 text-base font-semibold text-slate-900">{item.title}</h3>
             <p className="mt-1 text-sm leading-6 text-slate-600">{item.desc}</p>
-            <span className="mt-3 inline-flex text-sm font-medium text-[#1f4ed8]">Buka pautan</span>
+            <span className="mt-3 inline-flex text-sm font-medium text-[#7E30E1]">Buka pautan</span>
           </a>
         ))}
       </div>

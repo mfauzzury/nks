@@ -99,13 +99,14 @@ async function signOut() {
   router.push("/login");
 }
 
-function isActive(path: string): boolean {
+function isActive(path: string, exact = false): boolean {
   if (path === "/") return route.path === "/";
-  return route.path.startsWith(path);
+  if (exact) return route.path === path;
+  return route.path === path || route.path.startsWith(path + "/");
 }
 
-function itemClass(path: string) {
-  if (isActive(path)) {
+function itemClass(path: string, exact = false) {
+  if (isActive(path, exact)) {
     return "border border-[var(--accent-200)] bg-[var(--accent-50)] font-medium text-[var(--accent-700)]";
   }
   return "border border-transparent text-slate-900";
@@ -332,8 +333,8 @@ watch(
                 class="group relative flex items-center rounded-lg text-sm font-medium transition-all hover:bg-[var(--accent-50)]"
                 :class="[
                   isCollapsed ? 'md:justify-center md:px-0 md:py-2.5 md:rounded-none gap-2.5 px-3 py-1.5' : 'gap-2.5 px-3 py-1.5',
-                  isCollapsed && isActive(item.to) ? 'md:border md:border-[var(--accent-200)] md:bg-[var(--accent-50)] md:text-[var(--accent-700)] md:font-medium text-slate-900' : 'text-slate-900',
-                  isCollapsed ? '' : itemClass(item.to)
+                  isCollapsed && isActive(item.to, true) ? 'md:border md:border-[var(--accent-200)] md:bg-[var(--accent-50)] md:text-[var(--accent-700)] md:font-medium text-slate-900' : 'text-slate-900',
+                  isCollapsed ? '' : itemClass(item.to, true)
                 ]"
               >
                 <span v-if="hasPendingForItem(item)" class="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 shrink-0 rounded-full bg-red-500" :class="isCollapsed ? 'md:left-1/2 md:-translate-x-1/2' : ''" />
@@ -342,7 +343,7 @@ watch(
                   class="shrink-0 transition-colors"
                   :class="[
                     isCollapsed ? 'md:h-5 md:w-5 h-4 w-4' : 'h-4 w-4',
-                    isCollapsed && isActive(item.to) ? 'md:text-[var(--accent-700)] text-slate-700' : isActive(item.to) ? 'text-slate-900' : 'text-slate-400 group-hover:text-[var(--accent-600)]'
+                    isCollapsed && isActive(item.to, true) ? 'md:text-[var(--accent-700)] text-slate-700' : isActive(item.to, true) ? 'text-slate-900' : 'text-slate-400 group-hover:text-[var(--accent-600)]'
                   ]"
                 />
                 <span class="flex-1" :class="isCollapsed ? 'md:hidden' : ''">{{ item.label }}</span>

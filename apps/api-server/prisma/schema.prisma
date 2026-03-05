@@ -73,6 +73,64 @@ enum SpgPayrollBatchStatus {
   cancelled
 }
 
+enum GuestPaymentSource {
+  ONLINE_GUEST
+  COUNTER_COLLECTION
+  CORPORATE_DIRECT
+  SPG
+}
+
+enum CounterPaymentChannel {
+  COUNTER_CASH
+  COUNTER_CARD_TERMINAL
+  COUNTER_CHEQUE
+  COUNTER_DEBIT
+  COUNTER_QR
+}
+
+enum CounterReconStatus {
+  unbatched
+  batched
+  reconciled
+  exception
+}
+
+enum CounterDepositType {
+  CASH_BANKIN
+  CARD_SETTLEMENT
+}
+
+enum CounterDepositStatus {
+  draft
+  submitted
+  matched
+  variance
+  reconciled
+  cancelled
+}
+
+enum BankStatementMatchStatus {
+  unmatched
+  auto_matched
+  manual_matched
+  ignored
+}
+
+enum ReconciliationCaseType {
+  unmatched_statement_line
+  unmatched_deposit_batch
+  amount_mismatch
+  bank_fee
+  reversal
+}
+
+enum ReconciliationCaseStatus {
+  open
+  investigating
+  resolved
+  rejected
+}
+
 model User {
   id           Int       @id @default(autoincrement())
   email        String    @unique
@@ -90,6 +148,13 @@ model User {
   blacklistChanges        PayerBlacklistHistory[]
   profileAuditsPerformed  AuditLogProfile[]
   spgPayrollStatusChanges SpgPayrollStatusHistory[]
+  counterCollectedPayments GuestPayment[]           @relation("CounterCollectedPayments")
+  counterCreatedBatches    CounterDepositBatch[]    @relation("CounterBatchCreatedBy")
+  counterApprovedBatches   CounterDepositBatch[]    @relation("CounterBatchApprovedBy")
+  bankStatementImports     BankStatementImport[]    @relation("BankStatementUploadedBy")
+  reconciliationAssigned   ReconciliationCase[]     @relation("ReconciliationAssignedTo")
+  reconciliationResolved   ReconciliationCase[]     @relation("ReconciliationResolvedBy")
+  counterStatusChanges     CounterStatusHistory[]
 }
 
 model Role {
@@ -453,10 +518,140 @@ model GuestPayment {
   amount        Decimal  @db.Decimal(18, 2)
   paymentMethod String
   status        String   @default("success")
+  source        GuestPaymentSource @default(ONLINE_GUEST)
+  counterChannel CounterPaymentChannel?
+  collectedByUserId Int?
+  collectionPoint String?
+  terminalRrn   String?
+  terminalAuthCode String?
+  terminalTid   String?
+  terminalMid   String?
+  depositBatchId Int?
+  reconStatus   CounterReconStatus @default(unbatched)
+  notes         String?   @db.Text
   paidAt        DateTime @default(now())
   createdAt     DateTime @default(now())
+  collectedByUser User? @relation("CounterCollectedPayments", fields: [collectedByUserId], references: [id], onDelete: SetNull)
+  depositBatch CounterDepositBatch? @relation(fields: [depositBatchId], references: [id], onDelete: SetNull)
 
   @@index([identityNo, paidAt])
+  @@index([source, paidAt])
+  @@index([reconStatus, paidAt])
+  @@index([depositBatchId])
+}
+
+model CounterDepositBatch {
+  id             Int                @id @default(autoincrement())
+  referenceNo    String             @unique
+  depositType    CounterDepositType
+  status         CounterDepositStatus @default(draft)
+  depositDate    DateTime
+  bankInDate     DateTime?
+  declaredAmount Decimal            @db.Decimal(18, 2)
+  systemAmount   Decimal            @db.Decimal(18, 2)
+  varianceAmount Decimal            @db.Decimal(18, 2) @default(0)
+  collectionPoint String?
+  createdBy      Int
+  approvedBy     Int?
+  approvedAt     DateTime?
+  slipUrl        String?
+  notes          String?            @db.Text
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  createdByUser  User               @relation("CounterBatchCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  approvedByUser User?              @relation("CounterBatchApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+  items          CounterDepositBatchItem[]
+  guestPayments  GuestPayment[]
+  statementLines BankStatementLine[]
+  reconciliationCases ReconciliationCase[]
+  statusHistory  CounterStatusHistory[]
+
+  @@index([depositDate, status])
+  @@index([depositType, status])
+}
+
+model CounterDepositBatchItem {
+  id            Int                @id @default(autoincrement())
+  batchId       Int
+  guestPaymentId Int               @unique
+  amount        Decimal            @db.Decimal(18, 2)
+  createdAt     DateTime           @default(now())
+  batch         CounterDepositBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+}
+
+model BankStatementImport {
+  id               Int                @id @default(autoincrement())
+  bankAccountNo    String?
+  statementDateFrom DateTime?
+  statementDateTo  DateTime?
+  fileName         String
+  uploadedBy       Int?
+  createdAt        DateTime           @default(now())
+  uploadedByUser   User?              @relation("BankStatementUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+  lines            BankStatementLine[]
+}
+
+model BankStatementLine {
+  id             Int                    @id @default(autoincrement())
+  importId       Int
+  lineNo         Int
+  txnDate        DateTime
+  description    String
+  referenceNo    String?
+  debit          Decimal?               @db.Decimal(18, 2)
+  credit         Decimal?               @db.Decimal(18, 2)
+  netAmount      Decimal                @db.Decimal(18, 2)
+  matchedBatchId Int?
+  matchStatus    BankStatementMatchStatus @default(unmatched)
+  createdAt      DateTime               @default(now())
+  import         BankStatementImport    @relation(fields: [importId], references: [id], onDelete: Cascade)
+  matchedBatch   CounterDepositBatch?   @relation(fields: [matchedBatchId], references: [id], onDelete: SetNull)
+  reconciliationCases ReconciliationCase[]
+
+  @@index([importId, txnDate])
+  @@index([matchStatus])
+}
+
+model ReconciliationCase {
+  id              Int                     @id @default(autoincrement())
+  caseType        ReconciliationCaseType
+  status          ReconciliationCaseStatus @default(open)
+  batchId         Int?
+  statementLineId Int?
+  differenceAmount Decimal?               @db.Decimal(18, 2)
+  reason          String?                 @db.Text
+  assignedTo      Int?
+  resolvedBy      Int?
+  resolvedAt      DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  batch           CounterDepositBatch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  statementLine   BankStatementLine?      @relation(fields: [statementLineId], references: [id], onDelete: SetNull)
+  assignedToUser  User?                   @relation("ReconciliationAssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
+  resolvedByUser  User?                   @relation("ReconciliationResolvedBy", fields: [resolvedBy], references: [id], onDelete: SetNull)
+  statusHistory   CounterStatusHistory[]
+
+  @@index([status, createdAt])
+}
+
+model CounterStatusHistory {
+  id           Int      @id @default(autoincrement())
+  entityType   String
+  entityId     Int
+  oldStatus    String?
+  newStatus    String
+  changedBy    Int?
+  changedAt    DateTime @default(now())
+  reason       String?  @db.Text
+  batchId      Int?
+  reconciliationCaseId Int?
+  changedByUser User?   @relation(fields: [changedBy], references: [id], onDelete: SetNull)
+  batch        CounterDepositBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  reconciliationCase ReconciliationCase? @relation(fields: [reconciliationCaseId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId, changedAt])
 }
 
 model SpgPayrollBatch {
