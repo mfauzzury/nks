@@ -75,6 +75,34 @@ integrationRouter.post("/files/analyze", upload.single("file"), async (req: Auth
 });
 
 integrationRouter.get("/sources", async (_req, res) => {
+  // Sync from Setting (Sumber Data + Kategori Sumber screens) so dropdown includes newly added sources
+  const catRow = await prisma.setting.findUnique({ where: { key: "sourceCategories" } });
+  const categories = catRow ? (JSON.parse(catRow.value) as Array<{ code: string; name: string; isActive: boolean }>) : [];
+  for (const cat of categories) {
+    await prisma.integrationSourceCategory.upsert({
+      where: { code: cat.code },
+      update: { name: cat.name, isActive: cat.isActive },
+      create: { code: cat.code, name: cat.name, isActive: cat.isActive },
+    });
+  }
+  const row = await prisma.setting.findUnique({ where: { key: "sourceData" } });
+  const items = row ? (JSON.parse(row.value) as Array<{ code: string; name: string; categoryCode: string; isActive: boolean }>) : [];
+  for (const item of items) {
+    const category = await prisma.integrationSourceCategory.findUnique({ where: { code: item.categoryCode } });
+    if (category) {
+      await prisma.integrationSource.upsert({
+        where: { code: item.code },
+        update: { name: item.name, categoryId: category.id, isActive: item.isActive },
+        create: {
+          code: item.code,
+          name: item.name,
+          categoryId: category.id,
+          transportType: "MANUAL",
+          isActive: item.isActive,
+        },
+      });
+    }
+  }
   const sources = await prisma.integrationSource.findMany({
     where: { isActive: true },
     include: { category: true },

@@ -226,6 +226,14 @@ settingsRouter.put("/source-categories", async (req, res) => {
     update: { value: JSON.stringify(payload.categories) },
     create: { key: "sourceCategories", value: JSON.stringify(payload.categories) },
   });
+  // Sync to IntegrationSourceCategory so File Upload dropdown stays in sync
+  for (const cat of payload.categories) {
+    await prisma.integrationSourceCategory.upsert({
+      where: { code: cat.code },
+      update: { name: cat.name, isActive: cat.isActive, notes: cat.notes ?? null },
+      create: { code: cat.code, name: cat.name, isActive: cat.isActive, notes: cat.notes ?? null },
+    });
+  }
   return sendOk(res, payload);
 });
 
@@ -242,5 +250,25 @@ settingsRouter.put("/source-data", async (req, res) => {
     update: { value: JSON.stringify(payload.items) },
     create: { key: "sourceData", value: JSON.stringify(payload.items) },
   });
+  // Sync to IntegrationSource so File Upload dropdown shows new sources
+  for (const item of payload.items) {
+    const category = await prisma.integrationSourceCategory.findUnique({
+      where: { code: item.categoryCode },
+    });
+    if (category) {
+      await prisma.integrationSource.upsert({
+        where: { code: item.code },
+        update: { name: item.name, categoryId: category.id, isActive: item.isActive, notes: item.notes ?? null },
+        create: {
+          code: item.code,
+          name: item.name,
+          categoryId: category.id,
+          transportType: "MANUAL",
+          isActive: item.isActive,
+          notes: item.notes ?? null,
+        },
+      });
+    }
+  }
   return sendOk(res, payload);
 });
