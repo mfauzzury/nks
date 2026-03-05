@@ -34,9 +34,22 @@ import DuplicateCasesView from "@/views/DuplicateCasesView.vue";
 import DuplicateCaseDetailView from "@/views/DuplicateCaseDetailView.vue";
 import ZakatTypesView from "@/views/ZakatTypesView.vue";
 import PaymentGatewaysView from "@/views/PaymentGatewaysView.vue";
+import SourceCategoriesView from "@/views/SourceCategoriesView.vue";
+import SumberDataListView from "@/views/SumberDataListView.vue";
+import SumberDataEditorView from "@/views/SumberDataEditorView.vue";
 import ZakatTypeEditorView from "@/views/ZakatTypeEditorView.vue";
 import SpgPendingBatchesView from "@/views/SpgPendingBatchesView.vue";
 import SpgPendingBatchDetailView from "@/views/SpgPendingBatchDetailView.vue";
+import IntegrationOverviewView from "@/views/integration/IntegrationOverviewView.vue";
+import IntegrationFileUploadView from "@/views/integration/IntegrationFileUploadView.vue";
+import IntegrationBatchProcessingView from "@/views/integration/IntegrationBatchProcessingView.vue";
+import IntegrationReconciliationView from "@/views/integration/IntegrationReconciliationView.vue";
+import IntegrationReconciliationRunDetailView from "@/views/integration/IntegrationReconciliationRunDetailView.vue";
+import IntegrationExceptionsView from "@/views/integration/IntegrationExceptionsView.vue";
+import IntegrationReportsView from "@/views/integration/IntegrationReportsView.vue";
+import IntegrationAmilListView from "@/views/integration/IntegrationAmilListView.vue";
+import IntegrationAmilDetailView from "@/views/integration/IntegrationAmilDetailView.vue";
+import IntegrationAmilEditView from "@/views/integration/IntegrationAmilEditView.vue";
 import CounterPaymentsListView from "@/views/CounterPaymentsListView.vue";
 import CounterDepositsView from "@/views/CounterDepositsView.vue";
 import CounterReconciliationView from "@/views/CounterReconciliationView.vue";
@@ -80,6 +93,19 @@ const router = createRouter({
     { path: "/zakat-config/types", name: "zakat-types", component: ZakatTypesView, meta: { requiresAuth: true, title: "Jenis Zakat" } },
     { path: "/zakat-config/types/:code", name: "zakat-types-edit", component: ZakatTypeEditorView, meta: { requiresAuth: true, title: "Edit Jenis Zakat" } },
     { path: "/zakat-config/payment-gateways", name: "zakat-payment-gateways", component: PaymentGatewaysView, meta: { requiresAuth: true, title: "Gerbang Pembayaran" } },
+    { path: "/zakat-config/source-categories", name: "zakat-source-categories", component: SourceCategoriesView, meta: { requiresAuth: true, title: "Kategori Sumber" } },
+    { path: "/zakat-config/source-data", name: "zakat-source-data", component: SumberDataListView, meta: { requiresAuth: true, title: "Sumber Data" } },
+    { path: "/zakat-config/source-data/:code", name: "zakat-source-data-edit", component: SumberDataEditorView, meta: { requiresAuth: true, title: "Edit Sumber Data" } },
+    { path: "/integration/3rd-party", name: "integration-3rd-party", component: IntegrationOverviewView, meta: { requiresAuth: true, title: "Integration 3rd Party - Overview" } },
+    { path: "/integration/3rd-party/file-upload", name: "integration-file-upload", component: IntegrationFileUploadView, meta: { requiresAuth: true, title: "Integration 3rd Party - File Upload" } },
+    { path: "/integration/3rd-party/batch-processing", name: "integration-batch-processing", component: IntegrationBatchProcessingView, meta: { requiresAuth: true, title: "Integration 3rd Party - Batch Processing" } },
+    { path: "/integration/3rd-party/reconciliation", name: "integration-reconciliation", component: IntegrationReconciliationView, meta: { requiresAuth: true, title: "Integration 3rd Party - Reconciliation" } },
+    { path: "/integration/3rd-party/reconciliation/:fileId", name: "integration-reconciliation-detail", component: IntegrationReconciliationRunDetailView, meta: { requiresAuth: true, title: "Reconciliation Run Detail" } },
+    { path: "/integration/3rd-party/exceptions", name: "integration-exceptions", component: IntegrationExceptionsView, meta: { requiresAuth: true, title: "Integration 3rd Party - Exceptions" } },
+    { path: "/integration/3rd-party/reports", name: "integration-reports", component: IntegrationReportsView, meta: { requiresAuth: true, title: "Integration 3rd Party - Reports" } },
+    { path: "/integration/3rd-party/amil", name: "integration-amil-list", component: IntegrationAmilListView, meta: { requiresAuth: true, title: "Integration 3rd Party - Amil" } },
+    { path: "/integration/3rd-party/amil/:id/edit", name: "integration-amil-edit", component: IntegrationAmilEditView, meta: { requiresAuth: true, title: "Integration 3rd Party - Edit Amil" } },
+    { path: "/integration/3rd-party/amil/:id", name: "integration-amil-detail", component: IntegrationAmilDetailView, meta: { requiresAuth: true, title: "Integration 3rd Party - View Amil" } },
     { path: "/menus", name: "menus", component: MenusView, meta: { requiresAuth: true, title: "Menus" } },
     { path: "/kitchen-sink", name: "kitchen-sink", component: KitchenSinkView, meta: { requiresAuth: true, title: "Kitchen Sink" } },
     { path: "/kitchen-sink/forms", name: "kitchen-forms", component: KitchenFormsView, meta: { requiresAuth: true, title: "Forms" } },

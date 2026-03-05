@@ -3,7 +3,7 @@ import { Router } from "express";
 import { prisma } from "../prisma.js";
 import type { SettingsPayload } from "../types.js";
 import { sendOk } from "../utils/responses.js";
-import { adminMenuPrefsSchema, paymentGatewaysSchema, settingsInputSchema, zakatTypesSchema } from "./schemas.js";
+import { adminMenuPrefsSchema, paymentGatewaysSchema, settingsInputSchema, sourceCategoriesSchema, sourceDataSchema, zakatTypesSchema } from "./schemas.js";
 
 const DEFAULT_ZAKAT_TYPES = [
   {
@@ -54,6 +54,19 @@ const DEFAULT_PAYMENT_GATEWAYS = [
   { code: "FPX", name: "FPX Online Banking", isActive: true, notes: "" },
   { code: "CARD", name: "Kad Kredit / Debit", isActive: true, notes: "" },
   { code: "JOMPAY", name: "JomPAY", isActive: true, notes: "" },
+];
+
+const DEFAULT_SOURCE_CATEGORIES = [
+  { code: "SPG", name: "Skim Potongan Gaji (SPG)", isActive: true, notes: "" },
+  { code: "PSP", name: "Platform Saluran Pembayaran (PSP)", isActive: true, notes: "" },
+  { code: "BANK", name: "BANK", isActive: true, notes: "" },
+];
+
+const DEFAULT_SOURCE_DATA = [
+  { code: "JAN", name: "Jabatan Akauntan Negara", categoryCode: "SPG", isActive: true, notes: "" },
+  { code: "BILPIZ", name: "BilPiz", categoryCode: "PSP", isActive: true, notes: "" },
+  { code: "BANK_ISLAM", name: "Bank Islam", categoryCode: "BANK", isActive: true, notes: "" },
+  { code: "MAYBANK", name: "Maybank", categoryCode: "BANK", isActive: true, notes: "" },
 ];
 
 const SETTINGS_KEYS: Array<keyof SettingsPayload> = [
@@ -125,6 +138,7 @@ settingsRouter.put("/admin-menu-prefs", async (req, res) => {
 settingsRouter.get("/zakat-types", async (req, res) => {
   const row = await prisma.setting.findUnique({ where: { key: "zakatTypes" } });
   const raw = row ? JSON.parse(row.value) : DEFAULT_ZAKAT_TYPES;
+  const isPublic = !req.headers.authorization && !(req as unknown as Record<string, unknown>).auth;
   const isPublic = !req.headers.authorization && !((req as unknown as Record<string, unknown>).auth);
   const types = Array.isArray(raw)
     ? raw.map((item: unknown, index: number) => {
@@ -195,6 +209,38 @@ settingsRouter.put("/payment-gateways", async (req, res) => {
     where: { key: "paymentGateways" },
     update: { value: JSON.stringify(payload.gateways) },
     create: { key: "paymentGateways", value: JSON.stringify(payload.gateways) },
+  });
+  return sendOk(res, payload);
+});
+
+settingsRouter.get("/source-categories", async (_req, res) => {
+  const row = await prisma.setting.findUnique({ where: { key: "sourceCategories" } });
+  const categories = row ? JSON.parse(row.value) : DEFAULT_SOURCE_CATEGORIES;
+  return sendOk(res, { categories });
+});
+
+settingsRouter.put("/source-categories", async (req, res) => {
+  const payload = sourceCategoriesSchema.parse(req.body);
+  await prisma.setting.upsert({
+    where: { key: "sourceCategories" },
+    update: { value: JSON.stringify(payload.categories) },
+    create: { key: "sourceCategories", value: JSON.stringify(payload.categories) },
+  });
+  return sendOk(res, payload);
+});
+
+settingsRouter.get("/source-data", async (_req, res) => {
+  const row = await prisma.setting.findUnique({ where: { key: "sourceData" } });
+  const items = row ? JSON.parse(row.value) : DEFAULT_SOURCE_DATA;
+  return sendOk(res, { items });
+});
+
+settingsRouter.put("/source-data", async (req, res) => {
+  const payload = sourceDataSchema.parse(req.body);
+  await prisma.setting.upsert({
+    where: { key: "sourceData" },
+    update: { value: JSON.stringify(payload.items) },
+    create: { key: "sourceData", value: JSON.stringify(payload.items) },
   });
   return sendOk(res, payload);
 });

@@ -11,6 +11,7 @@ export type User = {
   name: string;
   photoUrl?: string;
   role?: string;
+  permissions?: string[];
 };
 
 export type PostInput = {
@@ -390,6 +391,21 @@ export type MergeExecuteInput = {
 export type PaymentGatewayConfig = {
   code: string;
   name: string;
+  isActive: boolean;
+  notes?: string;
+};
+
+export type SourceCategoryConfig = {
+  code: string;
+  name: string;
+  isActive: boolean;
+  notes?: string;
+};
+
+export type SourceDataConfig = {
+  code: string;
+  name: string;
+  categoryCode: string;
   isActive: boolean;
   notes?: string;
 };

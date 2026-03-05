@@ -52,10 +52,10 @@ type PayerStats = {
     source: string;
     zakatType: string;
     status: string;
-    receiptNo: string;
-    payerName: string;
-    identityNo: string;
-    paymentMethod: string;
+    receiptNo?: string;
+    payerName?: string;
+    identityNo?: string;
+    paymentMethod?: string;
   }>;
 };
 

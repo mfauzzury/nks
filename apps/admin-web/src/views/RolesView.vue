@@ -26,6 +26,8 @@ const availablePermissions = [
   "roles.view", "roles.create", "roles.edit", "roles.delete",
   "settings.view", "settings.edit",
   "menus.view", "menus.edit",
+  "integration.view", "integration.upload", "integration.process",
+  "integration.reconcile", "integration.exceptions", "integration.reports",
 ];
 
 const form = ref<RoleInput>({
