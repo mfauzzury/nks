@@ -108,7 +108,7 @@ integrationRouter.post("/files/upload", upload.single("file"), async (req: Authe
   }
 
   const validFileTypes = ["ENCRYPTED_TXT", "TXT", "CSV", "EXCEL"];
-  const fileType = validFileTypes.includes(fileTypeRaw) ? (fileTypeRaw as IntegrationFileType) : IntegrationFileType.ENCRYPTED_TXT;
+  const fileType = validFileTypes.includes(fileTypeRaw) ? (fileTypeRaw as IntegrationFileTypeType) : IntegrationFileType.ENCRYPTED_TXT;
 
   const columnMappingJson = String(req.body?.columnMappingJson ?? "").trim() || null;
   const aiDetectedSource = String(req.body?.aiDetectedSource ?? "").trim() || null;
@@ -1222,3 +1222,5 @@ integrationRouter.post("/reconciliation/apply-match-many-to-many-batch", async (
 
   return sendOk(res, { success: true, results });
 });
+
+

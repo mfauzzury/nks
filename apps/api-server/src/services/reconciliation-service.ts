@@ -264,7 +264,7 @@ export async function runReconciliation(
       continue;
     }
 
-    let matchStatus: ReconciliationMatchStatus;
+    let matchStatus: ReconciliationMatchStatusType;
     let matchRule: string | null = null;
     let internalTxId: string | null = null;
 
@@ -338,3 +338,5 @@ export async function runReconciliation(
 
   return { success: true, result };
 }
+
+

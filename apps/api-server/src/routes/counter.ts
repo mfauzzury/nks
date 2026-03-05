@@ -266,7 +266,7 @@ counterRouter.post("/deposits", depositSlipUpload.single("slipFile"), async (req
     const batch = await tx.counterDepositBatch.create({
       data: {
         referenceNo: buildCounterDepositReferenceNo(),
-        depositType: input.depositType as CounterDepositType,
+        depositType: input.depositType as CounterDepositTypeType,
         status: CounterDepositStatus.submitted,
         depositDate,
         declaredAmount: roundedDeclared,
@@ -448,3 +448,5 @@ counterRouter.delete("/deposits/:id/slip-file", async (req: AuthedRequest, res) 
   });
   return sendOk(res, { success: true });
 });
+
+
