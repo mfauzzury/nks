@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
-import { GuestPaymentSource, PayerType } from "@prisma/client";
+import pkg from "@prisma/client";
+const { GuestPaymentSource, PayerType } = pkg;
 import { Router } from "express";
 
 import { prisma } from "../prisma.js";
