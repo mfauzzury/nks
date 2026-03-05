@@ -1,10 +1,13 @@
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 
 dotenv.config();
 
 const prisma = new PrismaClient();
+
+const SEED_BATCH_FILE_HASH = crypto.createHash("sha256").update("seed-batch-processing-demo-001").digest("hex");
 
 async function main() {
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
@@ -13,11 +16,21 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
-  await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: { name: adminName, passwordHash },
-    create: { email: adminEmail, name: adminName, passwordHash },
-  });
+  // Seed one user per role for testing
+  const usersPerRole = [
+    { email: adminEmail, name: adminName, role: "admin", password: adminPassword },
+    { email: "eksekutif@example.com", name: "Eksekutif Pemprosesan", role: "eksekutif pemprosesan", password: adminPassword },
+    { email: "penyelia@example.com", name: "Penyelia", role: "penyelia", password: adminPassword },
+  ];
+
+  for (const u of usersPerRole) {
+    const hash = await bcrypt.hash(u.password, 12);
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: { name: u.name, passwordHash: hash, role: u.role },
+      create: { email: u.email, name: u.name, passwordHash: hash, role: u.role },
+    });
+  }
 
   const defaultSettings: Array<{ key: string; value: string }> = [
     { key: "siteTitle", value: "CORRAD Xpress" },
@@ -204,14 +217,12 @@ async function main() {
     await prisma.post.update({ where: { slug: "data-mesh-revolution" }, data: { categories: { set: [{ id: bigData.id }, { id: swEng.id }] } } });
   }
 
-  // Seed default role
-  await prisma.role.upsert({
-    where: { name: "admin" },
-    update: {},
-    create: {
+  // Seed default roles
+  const rolesToSeed = [
+    {
       name: "admin",
       description: "Full system access",
-      permissions: JSON.stringify([
+      permissions: [
         "posts.view", "posts.create", "posts.edit", "posts.delete",
         "pages.view", "pages.create", "pages.edit", "pages.delete",
         "media.view", "media.upload", "media.delete",
@@ -219,9 +230,119 @@ async function main() {
         "roles.view", "roles.create", "roles.edit", "roles.delete",
         "settings.view", "settings.edit",
         "menus.view", "menus.edit",
-      ]),
+        "integration.view", "integration.upload", "integration.process",
+        "integration.reconcile", "integration.exceptions", "integration.reports",
+      ],
     },
-  });
+    {
+      name: "eksekutif pemprosesan",
+      description: "Executive Processing - process uploads, reconcile, view reports (Integration 3rd Party)",
+      permissions: [
+        "integration.view", "integration.upload", "integration.process",
+        "integration.reconcile", "integration.reports",
+      ],
+    },
+    {
+      name: "penyelia",
+      description: "Supervisor - review exceptions, approve/reprocess transactions (Integration 3rd Party)",
+      permissions: [
+        "integration.view", "integration.upload", "integration.process",
+        "integration.reconcile", "integration.exceptions", "integration.reports",
+      ],
+    },
+  ];
+
+  for (const r of rolesToSeed) {
+    await prisma.role.upsert({
+      where: { name: r.name },
+      update: { description: r.description, permissions: JSON.stringify(r.permissions) },
+      create: {
+        name: r.name,
+        description: r.description,
+        permissions: JSON.stringify(r.permissions),
+      },
+    });
+  }
+
+  // Seed Integration 3rd Party: Kategori Sumber & Sumber Data (matches File Upload screen)
+  const sourceCategories = [
+    { code: "SPG", name: "Skim Potongan Gaji (SPG)", isActive: true, notes: "" },
+    { code: "PSP", name: "Platform Saluran Pembayaran (PSP)", isActive: true, notes: "" },
+    { code: "BANK", name: "BANK", isActive: true, notes: "" },
+  ];
+  for (const cat of sourceCategories) {
+    await prisma.integrationSourceCategory.upsert({
+      where: { code: cat.code },
+      update: { name: cat.name, isActive: cat.isActive, notes: cat.notes },
+      create: cat,
+    });
+  }
+  const spgCat = await prisma.integrationSourceCategory.findUnique({ where: { code: "SPG" } });
+  const pspCat = await prisma.integrationSourceCategory.findUnique({ where: { code: "PSP" } });
+  const bankCat = await prisma.integrationSourceCategory.findUnique({ where: { code: "BANK" } });
+  const sourceData = [
+    { code: "JAN", name: "Jabatan Akauntan Negara", categoryCode: "SPG" },
+    { code: "BILPIZ", name: "BilPiz", categoryCode: "PSP" },
+    { code: "BANK_ISLAM", name: "Bank Islam", categoryCode: "BANK" },
+    { code: "MAYBANK", name: "Maybank", categoryCode: "BANK" },
+  ];
+  for (const src of sourceData) {
+    const categoryId =
+      src.categoryCode === "SPG" ? spgCat?.id : src.categoryCode === "PSP" ? pspCat?.id : bankCat?.id;
+    if (!categoryId) continue;
+    await prisma.integrationSource.upsert({
+      where: { code: src.code },
+      update: { name: src.name, categoryId },
+      create: { code: src.code, name: src.name, categoryId, transportType: "MANUAL" },
+    });
+  }
+
+  // Seed IntegrationConfig: PGP decryption password for JAN (dev sample uses "nks-jan-dev-2025")
+  const janSourceForConfig = await prisma.integrationSource.findUnique({ where: { code: "JAN" } });
+  if (janSourceForConfig) {
+    const pgpPassword = process.env.JAN_PGP_PASSWORD ?? "nks-jan-dev-2025";
+    const existing = await prisma.integrationConfig.findFirst({
+      where: { sourceId: janSourceForConfig.id, configKey: "pgp_decrypt_password" },
+    });
+    if (existing) {
+      await prisma.integrationConfig.update({
+        where: { id: existing.id },
+        data: { configValue: pgpPassword },
+      });
+    } else {
+      await prisma.integrationConfig.create({
+        data: {
+          sourceId: janSourceForConfig.id,
+          configKey: "pgp_decrypt_password",
+          configValue: pgpPassword,
+          isSecret: true,
+        },
+      });
+    }
+  }
+
+  // Seed one IntegrationFile for Batch Processing screen (idempotent - no duplicates)
+  const janSource = await prisma.integrationSource.findUnique({ where: { code: "JAN" } });
+  if (janSource) {
+    await prisma.integrationFile.upsert({
+      where: { fileHashSha256: SEED_BATCH_FILE_HASH },
+      update: {},
+      create: {
+        sourceId: janSource.id,
+        fileName: "zakat-jan-2025-sample.txt",
+        filePath: null,
+        fileHashSha256: SEED_BATCH_FILE_HASH,
+        receivedChannel: "MANUAL",
+        fileType: "ENCRYPTED_TXT",
+        description: "Sample batch file for demo",
+        encrypted: true,
+        decryptStatus: "PENDING",
+        validationStatus: "PENDING",
+        processingStatus: "PENDING",
+        totalRecordsDeclared: 42,
+      },
+    });
+  }
 
   const muslimNames = [
     "Muhammad Amir Hakim",
@@ -363,20 +484,15 @@ async function main() {
 
   for (let i = 0; i < 20; i += 1) {
     const identity = icNo(i + 1);
-    const existingGuest = await prisma.guestPayment.findFirst({
-      where: {
-        identityNo: identity,
-        status: "success",
-      },
-    });
-    if (existingGuest) continue;
-
+    const receiptNo = `GRCPT-SEED-REG-${String(i + 1).padStart(3, "0")}`;
     const zakatType = seedZakatTypes[i % seedZakatTypes.length];
     const payMethod = seedPayMethods[i % seedPayMethods.length];
 
-    await prisma.guestPayment.create({
-      data: {
-        receiptNo: `GRCPT-SEED-REG-${String(i + 1).padStart(3, "0")}`,
+    await prisma.guestPayment.upsert({
+      where: { receiptNo },
+      update: {},
+      create: {
+        receiptNo,
         guestName: muslimNames[i],
         identityNo: identity,
         email: `individu${i + 1}@contoh.my`,
@@ -390,20 +506,15 @@ async function main() {
   // Seed 20 direct-pay contributors without registered account
   for (let i = 0; i < 20; i += 1) {
     const identity = icNo(900 + i);
-    const existingGuest = await prisma.guestPayment.findFirst({
-      where: {
-        identityNo: identity,
-        status: "success",
-      },
-    });
-    if (existingGuest) continue;
-
+    const receiptNo = `GRCPT-SEED-GUEST-${String(i + 1).padStart(3, "0")}`;
     const zakatType = seedZakatTypes[(i + 3) % seedZakatTypes.length];
     const payMethod = seedPayMethods[(i + 1) % seedPayMethods.length];
 
-    await prisma.guestPayment.create({
-      data: {
-        receiptNo: `GRCPT-SEED-GUEST-${String(i + 1).padStart(3, "0")}`,
+    await prisma.guestPayment.upsert({
+      where: { receiptNo },
+      update: {},
+      create: {
+        receiptNo,
         guestName: `${muslimNames[i]} Bin Abdullah`,
         identityNo: identity,
         email: `tetamu${i + 1}@contoh.my`,
@@ -727,10 +838,41 @@ async function main() {
     }
   }
 
-  console.log(`Seeded admin user: ${adminEmail}`);
+  console.log("Seeded users per role: admin@example.com (admin), eksekutif@example.com (eksekutif pemprosesan), penyelia@example.com (penyelia)");
   console.log(`Seeded ${samplePosts.length} sample posts`);
   console.log(`Seeded ${sampleCategories.length} categories`);
-  console.log("Seeded default admin role");
+  console.log("Seeded roles: admin, eksekutif pemprosesan, penyelia");
+  // Seed sample Bank Statement for JAN/BANK reconciliation
+  const existingBankFile = await prisma.bankStatementFile.findFirst();
+  if (!existingBankFile) {
+    const bankFile = await prisma.bankStatementFile.create({
+      data: {
+        bankCode: "BIMB",
+        bankName: "Bank Islam",
+        accountNo: "1234567890",
+        statementDate: new Date("2025-03-01"),
+        importedBy: "SEED",
+      },
+    });
+    for (let i = 0; i < 20; i += 1) {
+      const identity = icNo(i + 1);
+      const amt = 50 + i * 5;
+      const d = new Date(2025, 2, (i % 28) + 1);
+      await prisma.bankStatementTransaction.create({
+        data: {
+          fileId: bankFile.id,
+          paymentReference: `ZAKAT-${identity}-${d.toISOString().slice(0, 10)}`,
+          valueDate: d,
+          amount: amt,
+          description: `Zakat ${muslimNames[i]}`,
+          counterparty: muslimNames[i],
+        },
+      });
+    }
+    console.log("Seeded Bank Statement: 1 file, 20 transactions (for JAN/BANK reconciliation)");
+  }
+
+  console.log("Seeded Integration 3rd Party: 3 Kategori Sumber (SPG, PSP, BANK), 4 Sumber Data (JAN, BILPIZ, BANK_ISLAM, MAYBANK), 1 Batch Processing sample file");
   console.log("Seeded Module 1 sample data: 20 individu berdaftar, 20 tetamu direct pay, 10 korporat, 100 staff, 10 syarikat Payer & SPG, 5 Payer sahaja, 5 SPG sahaja");
 }
 

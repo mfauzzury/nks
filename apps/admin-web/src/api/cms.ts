@@ -30,6 +30,8 @@ import type {
   UserDetail,
   UserInput,
   PaymentGatewayConfig,
+  SourceCategoryConfig,
+  SourceDataConfig,
   ZakatTypeConfig,
 } from "@/types";
 import type { AdminMenuPrefs } from "@/config/admin-menu";
@@ -401,5 +403,27 @@ export async function savePaymentGateways(gateways: PaymentGatewayConfig[]) {
   return apiRequest<{ data: { gateways: PaymentGatewayConfig[] } }>("/api/settings/payment-gateways", {
     method: "PUT",
     body: JSON.stringify({ gateways }),
+  });
+}
+
+export async function getSourceCategories() {
+  return apiRequest<{ data: { categories: SourceCategoryConfig[] } }>("/api/settings/source-categories");
+}
+
+export async function saveSourceCategories(categories: SourceCategoryConfig[]) {
+  return apiRequest<{ data: { categories: SourceCategoryConfig[] } }>("/api/settings/source-categories", {
+    method: "PUT",
+    body: JSON.stringify({ categories }),
+  });
+}
+
+export async function getSourceData() {
+  return apiRequest<{ data: { items: SourceDataConfig[] } }>("/api/settings/source-data");
+}
+
+export async function saveSourceData(items: SourceDataConfig[]) {
+  return apiRequest<{ data: { items: SourceDataConfig[] } }>("/api/settings/source-data", {
+    method: "PUT",
+    body: JSON.stringify({ items }),
   });
 }

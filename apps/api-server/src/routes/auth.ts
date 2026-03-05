@@ -70,7 +70,7 @@ authPublicRouter.post("/login", loginRateLimit, async (req, res) => {
   });
 
   return sendOk(res, {
-    user: userPayload(user),
+    user: await userPayloadWithPermissions(user),
   });
 });
 
@@ -85,13 +85,39 @@ authRouter.post("/logout", async (req, res) => {
   return sendOk(res, { success: true });
 });
 
-function userPayload(user: { id: number; email: string; name: string; photoUrl: string | null; role: string }) {
+async function userPayloadWithPermissions(
+  user: { id: number; email: string; name: string; photoUrl: string | null; role: string },
+) {
+  const roleRecord = await prisma.role.findUnique({ where: { name: user.role } });
+  let permissions: string[] = [];
+  if (roleRecord?.permissions) {
+    try {
+      permissions = JSON.parse(roleRecord.permissions) as string[];
+    } catch {
+      /* ignore */
+    }
+  }
+  // Admin role gets all known permissions if not in Role table
+  if (user.role === "admin" && permissions.length === 0) {
+    permissions = [
+      "posts.view", "posts.create", "posts.edit", "posts.delete",
+      "pages.view", "pages.create", "pages.edit", "pages.delete",
+      "media.view", "media.upload", "media.delete",
+      "users.view", "users.create", "users.edit", "users.delete",
+      "roles.view", "roles.create", "roles.edit", "roles.delete",
+      "settings.view", "settings.edit",
+      "menus.view", "menus.edit",
+      "integration.view", "integration.upload", "integration.process",
+      "integration.reconcile", "integration.exceptions", "integration.reports",
+    ];
+  }
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     photoUrl: user.photoUrl,
     role: user.role,
+    permissions,
   };
 }
 
@@ -106,7 +132,7 @@ authRouter.get("/me", async (req: AuthedRequest, res) => {
   }
 
   return sendOk(res, {
-    user: userPayload(user),
+    user: await userPayloadWithPermissions(user),
     csrfToken: req.csrfTokenValue ?? req.cookies?.[env.csrfCookieName] ?? "",
   });
 });
@@ -126,7 +152,7 @@ authRouter.put("/me", async (req: AuthedRequest, res) => {
     data,
   });
 
-  return sendOk(res, { user: userPayload(user) });
+  return sendOk(res, { user: await userPayloadWithPermissions(user) });
 });
 
 authRouter.post("/password", async (req: AuthedRequest, res) => {
@@ -181,7 +207,7 @@ authRouter.post("/avatar", avatarUpload.single("file"), async (req: AuthedReques
     data: { photoUrl },
   });
 
-  return sendOk(res, { user: userPayload(user) });
+  return sendOk(res, { user: await userPayloadWithPermissions(user) });
 });
 
 authRouter.delete("/avatar", async (req: AuthedRequest, res) => {
@@ -200,5 +226,5 @@ authRouter.delete("/avatar", async (req: AuthedRequest, res) => {
     data: { photoUrl: null },
   });
 
-  return sendOk(res, { user: userPayload(user) });
+  return sendOk(res, { user: await userPayloadWithPermissions(user) });
 });
