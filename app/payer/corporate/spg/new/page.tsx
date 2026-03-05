@@ -110,7 +110,7 @@ function StepIndicator({ current }: { current: number }) {
     <nav className="relative flex items-center justify-between">
       <div className="absolute left-0 right-0 top-5 z-0 mx-10 h-0.5 bg-slate-200" />
       <div
-        className="absolute left-0 top-5 z-0 mx-10 h-0.5 bg-[#7E30E1] transition-all duration-300"
+        className="absolute left-0 top-5 z-0 mx-10 h-0.5 portal-bg-accent transition-all duration-300"
         style={{ width: `${((Math.min(current, 5) - 1) / 4) * 100}%` }}
       />
       {STEPS.map((s) => {
@@ -122,15 +122,15 @@ function StepIndicator({ current }: { current: number }) {
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
                 done
-                  ? "border-[#7E30E1] bg-[#7E30E1] text-white"
+                  ? "portal-border-secondary portal-bg-accent portal-text-accent"
                   : active
-                    ? "border-[#7E30E1] bg-white text-[#7E30E1] shadow-sm shadow-purple-300"
+                    ? "portal-border-secondary bg-white portal-text-accent shadow-sm shadow-yellow-300"
                     : "border-slate-200 bg-white text-slate-400"
               }`}
             >
               {done ? <Check className="h-4.5 w-4.5" /> : <Icon className="h-4.5 w-4.5" />}
             </div>
-            <span className={`text-xs font-medium ${done || active ? "text-[#7E30E1]" : "text-slate-400"}`}>
+            <span className={`text-xs font-medium ${done || active ? "portal-text-secondary" : "text-slate-400"}`}>
               {s.label}
             </span>
           </div>
@@ -258,7 +258,7 @@ export default function SpgNewSubmissionPage() {
         <div>
           <Link
             href="/payer/corporate/spg"
-            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-[#7E30E1]"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-500 transition portal-hover-text-secondary"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Kembali ke Dashboard SPG
@@ -300,7 +300,7 @@ export default function SpgNewSubmissionPage() {
                 <div className="space-y-2">
                   <Label>Bulan</Label>
                   <select
-                    className="flex h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-base focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
+                    className="flex h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-base portal-focus"
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
                   >
@@ -502,11 +502,11 @@ export default function SpgNewSubmissionPage() {
                       onClick={() => setPaymentChannel(ch.code)}
                       className={`rounded-xl border-2 p-3 text-left transition ${
                         paymentChannel === ch.code
-                          ? "border-[#7E30E1] bg-purple-50"
+                          ? "portal-border-secondary bg-yellow-50"
                           : "border-slate-200 bg-white hover:border-slate-300"
                       }`}
                     >
-                      <p className={`text-sm font-medium ${paymentChannel === ch.code ? "text-[#7E30E1]" : "text-slate-700"}`}>
+                      <p className={`text-sm font-medium ${paymentChannel === ch.code ? "portal-text-accent" : "text-slate-700"}`}>
                         {ch.label}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-400">
@@ -587,11 +587,11 @@ export default function SpgNewSubmissionPage() {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">Jumlah Bayaran</p>
-                    <p className="mt-0.5 text-sm font-semibold text-[#7E30E1]">{moneyFormat(totalAmount)}</p>
+                    <p className="mt-0.5 text-sm font-semibold portal-text-accent">{moneyFormat(totalAmount)}</p>
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl bg-purple-50 px-4 py-3 text-sm text-purple-800">
+              <div className="rounded-xl bg-yellow-50 px-4 py-3 text-sm portal-text-accent">
                 {selectedChannel.online
                   ? "Selepas hantar, anda akan diarahkan ke gateway pembayaran dalam talian."
                   : "Batch akan disimpan sebagai 'Menunggu Bayaran'. Sila buat bayaran melalui kaedah yang dipilih."}

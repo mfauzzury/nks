@@ -158,13 +158,49 @@
   .hide-scrollbar::-webkit-scrollbar { display: none; }
   .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* Portal cosmic violet theme — edit here to retheme all portal pages */
+  /* Portal theme — edit here to retheme all portal pages */
   .portal-cosmic-bg {
-    background: linear-gradient(to bottom right, #1a0538, #49108B, #7E30E1);
+    background:
+      radial-gradient(640px 320px at 84% 16%, rgba(255, 236, 0, 0.3), transparent 64%),
+      radial-gradient(440px 220px at 74% 82%, rgba(255, 236, 0, 0.2), transparent 72%),
+      radial-gradient(1200px 520px at 8% -12%, rgba(15, 127, 255, 0.14), transparent 58%),
+      radial-gradient(900px 420px at 92% -10%, rgba(24, 61, 228, 0.24), transparent 52%),
+      linear-gradient(145deg, #000957 0%, #07137f 44%, #183DE4 74%, #0F7FFF 96%, #FFEC00 100%);
   }
-  .portal-orb-1 { background-color: rgba(226, 110, 229, 0.35); }
-  .portal-orb-2 { background-color: rgba(243, 248, 255, 0.3); }
-  .portal-card { background-color: #F3F8FF; }
+  .portal-theme {
+    --portal-accent: #FFEC00;
+    --portal-accent-hover: #f2d600;
+    --portal-accent-text: #000957;
+    --portal-accent-soft: rgba(255, 236, 0, 0.25);
+    --portal-accent-soft-strong: rgba(255, 236, 0, 0.3);
+  }
+  .portal-orb-1 { background-color: rgba(15, 127, 255, 0.28); }
+  .portal-orb-2 { background-color: rgba(255, 236, 0, 0.5); }
+  .portal-card {
+    background: linear-gradient(135deg, rgba(243, 248, 255, 0.92), rgba(232, 225, 252, 0.88));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+  .portal-btn-primary {
+    background-color: var(--portal-accent) !important;
+    color: var(--portal-accent-text) !important;
+  }
+  .portal-btn-primary:hover {
+    background-color: var(--portal-accent-hover) !important;
+  }
+  .portal-focus:focus {
+    border-color: var(--portal-accent);
+    outline: none;
+    box-shadow: 0 0 0 1px var(--portal-accent);
+  }
+  .portal-text-accent { color: var(--portal-accent-text); }
+  .portal-text-secondary { color: var(--portal-accent); }
+  .portal-border-secondary { border-color: var(--portal-accent); }
+  .portal-bg-accent { background-color: var(--portal-accent); }
+  .portal-bg-accent-soft { background-color: var(--portal-accent-soft); }
+  .portal-bg-accent-soft-strong { background-color: var(--portal-accent-soft-strong); }
+  .portal-hover-text-secondary:hover { color: var(--portal-accent); }
+  .portal-hover-border-secondary:hover { border-color: rgba(255, 236, 0, 0.7); }
 
   .storefront-neon-bg {
     background:

@@ -81,7 +81,7 @@ export default function PortalLoginPage() {
                   name="identityNo"
                   required
                   placeholder="Contoh: 900101011234 atau 202301012345"
-                  className="rounded-lg border-2 border-slate-400 px-4 py-3 text-base outline-none transition focus:border-[#7E30E1]"
+                  className="rounded-lg border-2 border-slate-400 px-4 py-3 text-base outline-none transition portal-focus"
                 />
               </label>
               <label className="grid gap-1 text-sm text-slate-700">
@@ -91,7 +91,7 @@ export default function PortalLoginPage() {
                   name="password"
                   required
                   placeholder="Masukkan kata laluan"
-                  className="rounded-lg border-2 border-slate-400 px-4 py-3 text-base outline-none transition focus:border-[#7E30E1]"
+                  className="rounded-lg border-2 border-slate-400 px-4 py-3 text-base outline-none transition portal-focus"
                 />
               </label>
             </div>
@@ -106,18 +106,18 @@ export default function PortalLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-4 h-12 w-full rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-4 text-base font-semibold text-white shadow-lg transition hover:from-[#d45ed5] hover:to-[#6b28c0] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-4 h-12 w-full rounded-xl portal-btn-primary px-4 text-base font-semibold portal-text-accent shadow-lg transition  disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Memproses..." : "Masuk"}
             </button>
 
             <p className="mt-4 text-xs text-slate-500">
               Belum ada akaun? Daftar sebagai{" "}
-              <Link href="/payer/individual/register" className="font-semibold text-[#7E30E1] hover:underline">
+              <Link href="/payer/individual/register" className="font-semibold portal-text-accent hover:underline">
                 Individu
               </Link>
               {" "}atau{" "}
-              <Link href="/payer/corporate/register" className="font-semibold text-[#7E30E1] hover:underline">
+              <Link href="/payer/corporate/register" className="font-semibold portal-text-accent hover:underline">
                 Korporat
               </Link>
               .

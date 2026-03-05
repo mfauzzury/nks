@@ -15,7 +15,7 @@ export default function PayerLayout({ children }: { children: React.ReactNode })
       showChatbot={!session}
       showHeader={false}
       showFooter={false}
-      wrapperClassName="portal-cosmic-bg min-h-screen text-slate-900"
+      wrapperClassName="portal-theme portal-cosmic-bg min-h-screen text-slate-900"
       mainClassName="mx-auto w-full max-w-6xl px-6 pt-0 pb-0"
     >
       {children}

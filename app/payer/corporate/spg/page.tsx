@@ -147,7 +147,7 @@ export default function CorporateSpgDashboardPage() {
               </div>
             </div>
             <Link href="/payer/corporate/spg/new">
-              <Button className="h-12 rounded-xl bg-gradient-to-r from-[#E26EE5] to-[#7E30E1] px-8 text-base font-semibold shadow-lg hover:from-[#d45ed5] hover:to-[#6b28c0] gap-2">
+              <Button className="h-12 rounded-xl portal-btn-primary px-8 text-base font-semibold shadow-lg  gap-2">
                 <Plus className="h-4 w-4" />
                 Tambah Bayaran
               </Button>
@@ -162,7 +162,7 @@ export default function CorporateSpgDashboardPage() {
               <p className="text-sm font-medium text-purple-100">Jumlah Dibayar</p>
               <Banknote className="h-4.5 w-4.5 text-purple-200" />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">
+            <p className="mt-2 text-2xl font-semibold text-white">
               {loading ? "..." : moneyFormat(totalPaid)}
             </p>
             <p className="mt-1 text-xs text-purple-200/70">Keseluruhan batch berjaya</p>
@@ -173,7 +173,7 @@ export default function CorporateSpgDashboardPage() {
               <p className="text-sm font-medium text-purple-100">Jumlah Pekerja</p>
               <Users className="h-4.5 w-4.5 text-purple-200" />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">
+            <p className="mt-2 text-2xl font-semibold text-white">
               {loading ? "..." : totalEmployees.toLocaleString()}
             </p>
             <p className="mt-1 text-xs text-purple-200/70">Pekerja dalam batch berjaya</p>
@@ -184,7 +184,7 @@ export default function CorporateSpgDashboardPage() {
               <p className="text-sm font-medium text-purple-100">Menunggu Bayaran</p>
               <Clock className="h-4.5 w-4.5 text-amber-500" />
             </div>
-            <p className="mt-2 text-2xl font-semibold text-[#1CEC72]">
+            <p className="mt-2 text-2xl font-semibold text-white">
               {loading ? "..." : pendingCount}
             </p>
             <p className="mt-1 text-xs text-purple-200/70">Batch belum selesai</p>
@@ -202,7 +202,7 @@ export default function CorporateSpgDashboardPage() {
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 portal-focus"
               >
                 <option value="">Semua Tahun</option>
                 {yearOptions.map((y) => (
@@ -212,7 +212,7 @@ export default function CorporateSpgDashboardPage() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 focus:border-[#7E30E1] focus:outline-none focus:ring-1 focus:ring-[#7E30E1]"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 portal-focus"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
