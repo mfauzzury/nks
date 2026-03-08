@@ -144,7 +144,13 @@ watch(() => route.path, syncOpenMenus, { immediate: true });
 watch(
   () => route.path,
   (path) => {
-    if (path.startsWith("/spg/payments") || path.startsWith("/duplicates") || path.startsWith("/integration/3rd-party/batch-processing") || path.startsWith("/integration/3rd-party/exceptions")) {
+    if (
+      path.startsWith("/spg/payments") ||
+      path.startsWith("/duplicates") ||
+      path.startsWith("/integration/3rd-party/batch-processing") ||
+      path.startsWith("/integration/3rd-party/reconciliation") ||
+      path.startsWith("/integration/3rd-party/exceptions")
+    ) {
       refreshPending();
     }
   },

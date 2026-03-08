@@ -186,17 +186,21 @@ function parseAmount(val: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-function recordHash(fileId: number, payerIc: string, txDate: Date, amount: number): string {
-  return crypto
-    .createHash("sha256")
-    .update(`${fileId}|${payerIc}|${txDate.toISOString().slice(0, 10)}|${amount}`)
-    .digest("hex");
+function recordHash(fileId: number, payerIc: string, txDate: Date, amount: number, rowIndex?: number): string {
+  const base = `${fileId}|${payerIc}|${txDate.toISOString().slice(0, 10)}|${amount}`;
+  const suffix = rowIndex !== undefined ? `|${rowIndex}` : "";
+  return crypto.createHash("sha256").update(base + suffix).digest("hex");
+}
+
+/** Content key for duplicate detection (same payerIc, txDate, amount across files) */
+function contentKey(payerIc: string | null, txDate: Date, amount: number): string {
+  return `${payerIc ?? ""}|${txDate.toISOString().slice(0, 10)}|${amount}`;
 }
 
 export async function processIntegrationFile(
   fileId: number,
   createdBy: string,
-): Promise<{ success: boolean; recordsParsed: number; error?: string }> {
+): Promise<{ success: boolean; recordsParsed: number; duplicatesDetected?: number; error?: string }> {
   const file = await prisma.integrationFile.findUnique({
     where: { id: fileId },
     include: { source: true },
@@ -334,7 +338,7 @@ export async function processIntegrationFile(
       const payerName = (row.payerName ?? "").slice(0, 150) || null;
       const sourceTxRef = (row.sourceTxRef ?? "").slice(0, 80) || null;
 
-      const hash = recordHash(fileId, payerIc ?? "", txDate, amount);
+      const hash = recordHash(fileId, payerIc ?? "", txDate, amount, i);
       stagingTxs.push({
         fileId,
         payerIc,
@@ -351,7 +355,89 @@ export async function processIntegrationFile(
       skipDuplicates: true,
     });
 
+    // Duplicate detection: same-file and cross-file (batched for performance)
+    const inserted = await prisma.integrationStagingTx.findMany({
+      where: { fileId },
+      orderBy: { id: "asc" },
+    });
+
+    // Pre-load cross-file keys: all (payerIc, txDate, amount) from other files
+    const crossFileKeys = new Set<string>();
+    const crossFileByKey = new Map<string, { id: number; fileId: number; fileName: string }>();
+    const otherStaging = await prisma.integrationStagingTx.findMany({
+      where: { fileId: { not: fileId } },
+      select: { id: true, fileId: true, payerIc: true, txDate: true, amount: true, file: { select: { fileName: true } } },
+    });
+    for (const row of otherStaging) {
+      const key = contentKey(row.payerIc, row.txDate, Number(row.amount));
+      crossFileKeys.add(key);
+      if (!crossFileByKey.has(key)) {
+        crossFileByKey.set(key, {
+          id: row.id,
+          fileId: row.fileId,
+          fileName: row.file?.fileName ?? "unknown",
+        });
+      }
+    }
+
+    const sameFileDupes: Array<{ stagingTxId: number; duplicateType: "SAME_FILE"; matchedStagingTxId: number; reason: string }> = [];
+    const crossFileDupes: Array<{ stagingTxId: number; duplicateType: "CROSS_FILE"; matchedStagingTxId: number; reason: string }> = [];
+    const idsToMarkDuplicate: number[] = [];
+
+    // Same-file: group by (payerIc, txDate, amount), collect duplicates
+    const keyToRows = new Map<string, typeof inserted>();
+    for (const row of inserted) {
+      const key = contentKey(row.payerIc, row.txDate, Number(row.amount));
+      const arr = keyToRows.get(key) ?? [];
+      arr.push(row);
+      keyToRows.set(key, arr);
+    }
+
+    for (const [, rows] of keyToRows) {
+      if (rows.length <= 1) continue;
+      const [first, ...dupes] = rows;
+      for (const dup of dupes) {
+        idsToMarkDuplicate.push(dup.id);
+        sameFileDupes.push({
+          stagingTxId: dup.id,
+          duplicateType: "SAME_FILE",
+          matchedStagingTxId: first.id,
+          reason: `Duplicate within file: same payerIc, txDate, amount as row ${first.id}`,
+        });
+      }
+    }
+
+    // Cross-file: check against pre-loaded set
+    for (const row of inserted) {
+      if (idsToMarkDuplicate.includes(row.id)) continue;
+      const key = contentKey(row.payerIc, row.txDate, Number(row.amount));
+      const existing = crossFileByKey.get(key);
+      if (existing) {
+        idsToMarkDuplicate.push(row.id);
+        crossFileDupes.push({
+          stagingTxId: row.id,
+          duplicateType: "CROSS_FILE",
+          matchedStagingTxId: existing.id,
+          reason: `Duplicate across files: matches row ${existing.id} in file ${existing.fileId} (${existing.fileName})`,
+        });
+      }
+    }
+
+    // Batch update staging status
+    if (idsToMarkDuplicate.length > 0) {
+      await prisma.integrationStagingTx.updateMany({
+        where: { id: { in: idsToMarkDuplicate } },
+        data: { stagingStatus: "DUPLICATE" },
+      });
+      await prisma.integrationStagingDuplicate.createMany({
+        data: [...sameFileDupes, ...crossFileDupes],
+      });
+    }
+
     const totalAmount = stagingTxs.reduce((s, t) => s + t.amount, 0);
+    const duplicateCount = await prisma.integrationStagingDuplicate.count({
+      where: { stagingTx: { fileId } },
+    });
 
     await prisma.integrationFile.update({
       where: { id: fileId },
@@ -376,12 +462,15 @@ export async function processIntegrationFile(
         fileId,
         eventType: "PROCESS_COMPLETED",
         eventStatus: "SUCCESS",
-        eventMessage: `Parsed ${stagingTxs.length} records, total RM ${totalAmount.toFixed(2)}`,
+        eventMessage:
+          duplicateCount > 0
+            ? `Parsed ${stagingTxs.length} records, total RM ${totalAmount.toFixed(2)}, ${duplicateCount} duplicate(s) detected`
+            : `Parsed ${stagingTxs.length} records, total RM ${totalAmount.toFixed(2)}`,
         createdBy,
       },
     });
 
-    return { success: true, recordsParsed: stagingTxs.length };
+    return { success: true, recordsParsed: stagingTxs.length, duplicatesDetected: duplicateCount };
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "Processing failed";
     await prisma.integrationFile.update({

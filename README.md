@@ -25,50 +25,25 @@ What this does:
 - Seeds default data
 - Starts API + Admin in dev mode
 
-## Docker (Production)
+## Local Development
 
-Run the full stack with MySQL:
-
-```bash
-docker compose up -d
-```
-
-**After code changes**, rebuild images so the containers use the latest code:
+Ensure MySQL is running and `DATABASE_URL` is set in `apps/api-server/.env`. After schema changes:
 
 ```bash
-docker compose up -d --build
+npm run db:push    # apply schema
+npm run db:seed   # seed default data (roles, sources, etc.)
 ```
 
-**Database schema**: The api-server container runs `prisma db push` on startup, so schema changes (including Integration tables) are applied automatically when the container starts. No manual migration needed when using Docker.
-
-Or rebuild a specific service (e.g. admin-web):
-
-```bash
-docker compose build admin-web
-docker compose up -d
-```
-
-- API: `http://localhost:4000`
-- Admin Web: `http://localhost:5173`
-- MySQL: `localhost:3306` (root/rootpass, database: corrad_xpress)
-
-Optional env vars (create `.env` in repo root):
+Optional env vars (in `apps/api-server/.env`):
 - `SESSION_SECRET` – session signing key
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` – admin credentials
 - `JAN_PGP_PASSWORD` – PGP decryption password for JAN encrypted files (default: `nks-jan-dev-2025`)
 
 **Generate JAN sample (1200 records, PGP encrypted):**
 ```bash
-# Rebuild first if you added the script recently
-docker compose up -d --build
-
-# Generate inside container (file stored in api_uploads volume)
-docker compose exec api-server npm run generate:jan-sample
-
-# Copy to host for upload via UI
-docker compose cp api-server:/app/apps/api-server/uploads/samples/jan-sample-1200.txt.gpg ./
+npm run generate:jan-sample
 ```
-Then upload `jan-sample-1200.txt.gpg` via Admin → Integration → File Upload (source=JAN, fileType=Encrypted .txt).
+Output: `uploads/samples/jan-sample-1200.txt.gpg`. Upload via Admin → Integration → File Upload (source=JAN, fileType=Encrypted .txt).
 
 ## URLs
 

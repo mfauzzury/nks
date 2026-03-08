@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, unref } from "vue";
 import {
   Settings,
   Globe,
@@ -14,6 +14,7 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 import { getSettings, updateSettings, uploadMedia, listMedia } from "@/api/cms";
 import { API_BASE_URL } from "@/env";
 import { useSiteStore } from "@/stores/site";
@@ -67,6 +68,7 @@ async function openMediaPicker(target: typeof mediaPickerTarget.value) {
 function selectFromLibrary(item: Media) {
   form.value[mediaPickerTarget.value] = item.url;
   mediaPickerOpen.value = false;
+  dragMediaPicker.resetPosition();
 }
 
 function resolveUrl(url: string) {
@@ -399,14 +401,21 @@ onMounted(load);
         leave-from-class="opacity-100"
         leave-to-class="opacity-0"
       >
-        <div v-if="mediaPickerOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="mediaPickerOpen = false">
-          <div class="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+        <div v-if="mediaPickerOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="mediaPickerOpen = false; dragMediaPicker.resetPosition()">
+          <div
+            :ref="dragMediaPicker.modalRef"
+            :style="unref(dragMediaPicker.modalStyle)"
+            class="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl"
+          >
+            <div
+              class="flex cursor-move items-center justify-between border-b border-slate-100 px-5 py-3"
+              @mousedown="dragMediaPicker.onHandleMouseDown"
+            >
               <div class="flex items-center gap-2">
                 <FolderOpen class="h-4 w-4 text-amber-600" />
                 <h3 class="text-sm font-semibold text-slate-900">Select from Library</h3>
               </div>
-              <button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" @click="mediaPickerOpen = false">
+              <button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" @click="mediaPickerOpen = false; dragMediaPicker.resetPosition()">
                 <X class="h-4 w-4" />
               </button>
             </div>

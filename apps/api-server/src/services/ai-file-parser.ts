@@ -19,7 +19,7 @@ export interface AIFileAnalysisResult {
   warnings: string[];
 }
 
-const KNOWN_SOURCES = ["JAN", "BILPIZ", "BANK_ISLAM", "MAYBANK"];
+const KNOWN_SOURCES = ["JAN", "BILPIZ", "AMIL_BILPIZ02", "BANK_ISLAM", "MAYBANK"];
 
 function readFileSample(filePath: string, fileType: string, maxBytes = 15000): string {
   const ext = path.extname(filePath).toLowerCase();

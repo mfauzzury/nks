@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { Layers, Clock, Eye, Play, Trash2, X } from "lucide-vue-next";
+import { onMounted, ref, unref } from "vue";
+import { Layers, Clock, Eye, Loader2, Play, Trash2, X } from "lucide-vue-next";
 
 import {
   deleteIntegrationFile,
@@ -10,6 +10,7 @@ import {
 } from "@/api/integration";
 import type { IntegrationFile, IntegrationStagingRow } from "@/api/integration";
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 
 const files = ref<IntegrationFile[]>([]);
 const loading = ref(true);
@@ -17,6 +18,7 @@ const error = ref("");
 const processingId = ref<number | null>(null);
 const deletingId = ref<number | null>(null);
 const viewModalOpen = ref(false);
+const dragViewModal = useDraggableModal();
 const viewFile = ref<IntegrationFile | null>(null);
 const viewRows = ref<IntegrationStagingRow[]>([]);
 const viewTotal = ref(0);
@@ -86,15 +88,30 @@ async function handleRemove(file: IntegrationFile) {
   }
 }
 
+const successMessage = ref("");
+
 async function handleProcess(file: IntegrationFile) {
   if (!canProcess(file)) return;
   processingId.value = file.id;
   error.value = "";
+  successMessage.value = "";
   try {
     const res = await processIntegrationFile(file.id);
-    const payload = res as { data?: { success: boolean; recordsParsed: number; file?: IntegrationFile } };
+    const payload = res as {
+      data?: { success: boolean; recordsParsed: number; duplicatesDetected?: number; file?: IntegrationFile };
+    };
     if (payload.data?.success) {
-      await loadFiles();
+      const updated = payload.data.file;
+      if (updated) {
+        const idx = files.value.findIndex((f) => f.id === file.id);
+        if (idx >= 0) files.value[idx] = { ...files.value[idx], ...updated };
+      }
+      const dup = payload.data.duplicatesDetected ?? 0;
+      successMessage.value =
+        dup > 0
+          ? `Processed ${payload.data.recordsParsed} records. ${dup} duplicate(s) detected.`
+          : `Processed ${payload.data.recordsParsed} records.`;
+      setTimeout(() => { successMessage.value = ""; }, 5000);
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Processing failed";
@@ -130,6 +147,7 @@ function closeViewModal() {
   viewModalOpen.value = false;
   viewFile.value = null;
   viewRows.value = [];
+  dragViewModal.resetPosition();
 }
 
 function formatStagingDate(iso: string) {
@@ -146,6 +164,10 @@ onMounted(loadFiles);
       <div>
         <h1 class="page-title">Integration 3rd Party - Batch Processing</h1>
         <p class="mt-1 text-sm text-slate-600">Process batch transactions via async queue. Validate, decrypt, and insert into staging.</p>
+      </div>
+
+      <div v-if="successMessage" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        {{ successMessage }}
       </div>
 
       <article class="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -219,7 +241,8 @@ onMounted(loadFiles);
                       :disabled="processingId !== null || deletingId !== null"
                       @click="handleProcess(file)"
                     >
-                      <Play class="h-3 w-3" />
+                      <Loader2 v-if="processingId === file.id" class="h-3 w-3 animate-spin" />
+                      <Play v-else class="h-3 w-3" />
                       {{ processingId === file.id ? "Processing..." : "Process" }}
                     </button>
                     <button
@@ -252,8 +275,15 @@ onMounted(loadFiles);
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           @click.self="closeViewModal"
         >
-          <div class="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-xl">
-            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div
+            :ref="dragViewModal.modalRef"
+            :style="unref(dragViewModal.modalStyle)"
+            class="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-xl"
+          >
+            <div
+              class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3"
+              @mousedown="dragViewModal.onHandleMouseDown"
+            >
               <h3 class="text-sm font-semibold text-slate-900">
                 View Data — {{ viewFile?.fileName ?? "" }}
               </h3>
@@ -286,10 +316,11 @@ onMounted(loadFiles);
                         <th class="px-3 py-2 text-xs font-semibold text-slate-600">Date</th>
                         <th class="px-3 py-2 text-xs font-semibold text-slate-600">Reference</th>
                         <th class="px-3 py-2 text-xs font-semibold text-slate-600 text-right">Amount (RM)</th>
+                        <th class="px-3 py-2 text-xs font-semibold text-slate-600">Status</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                      <tr v-for="(row, i) in viewRows" :key="row.id" class="hover:bg-slate-50">
+                      <tr v-for="(row, i) in viewRows" :key="row.id" class="hover:bg-slate-50" :class="{ 'bg-amber-50': row.stagingStatus === 'DUPLICATE' }">
                         <td class="px-3 py-2 font-mono text-slate-500">{{ i + 1 }}</td>
                         <td class="px-3 py-2 text-slate-700">{{ row.payerIc ?? "—" }}</td>
                         <td class="px-3 py-2 text-slate-700">{{ row.payerName ?? "—" }}</td>
@@ -297,6 +328,10 @@ onMounted(loadFiles);
                         <td class="px-3 py-2 text-slate-700">{{ row.sourceTxRef ?? "—" }}</td>
                         <td class="px-3 py-2 text-right font-medium text-slate-800">
                           {{ Number(row.amount).toLocaleString("ms-MY", { minimumFractionDigits: 2 }) }}
+                        </td>
+                        <td class="px-3 py-2">
+                          <span v-if="row.stagingStatus === 'DUPLICATE'" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Duplicate</span>
+                          <span v-else class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ row.stagingStatus ?? "NEW" }}</span>
                         </td>
                       </tr>
                     </tbody>

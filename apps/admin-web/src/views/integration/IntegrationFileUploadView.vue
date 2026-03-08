@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { AlertCircle, Bot, CheckCircle2, FileUp, Loader2, Settings2, Upload } from "lucide-vue-next";
+import { AlertCircle, ArrowRight, Bot, CheckCircle2, FileUp, Layers, Loader2, RefreshCw, Settings2, Upload } from "lucide-vue-next";
+import { useRouter } from "vue-router";
 
 import {
   analyzeFileStructure,
@@ -42,9 +43,23 @@ const successMessage = ref("");
 const aiResult = ref<AIFileAnalysisResult | null>(null);
 const showPreview = ref(false);
 
+const router = useRouter();
+
 const isFormValid = computed(
   () => !!form.value.source && !!form.value.fileType,
 );
+
+const currentStep = computed(() => {
+  if (successMessage.value) return 2;
+  return 1;
+});
+
+const steps = [
+  { num: 1, label: "Upload" },
+  { num: 2, label: "Batch" },
+  { num: 3, label: "Reconciliation" },
+  { num: 4, label: "Report" },
+];
 
 function onDragOver(e: DragEvent) {
   e.preventDefault();
@@ -181,6 +196,64 @@ onMounted(() => loadSources());
         <p class="mt-1 text-sm text-slate-600">
           Upload and receive encrypted files from external systems. Supports FTP auto-polling and manual upload.
         </p>
+      </div>
+
+      <!-- Flow Stepper -->
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Aliran Fail / Data</p>
+        <div class="flex flex-nowrap items-center gap-1 overflow-x-auto sm:gap-2">
+          <template v-for="(step, idx) in steps" :key="step.num">
+            <div
+              :class="[
+                'flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 sm:px-3',
+                currentStep === step.num ? 'bg-violet-100 text-violet-800' : currentStep > step.num ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500',
+              ]"
+            >
+              <span
+                :class="[
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                  currentStep === step.num ? 'bg-violet-600 text-white' : currentStep > step.num ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500',
+                ]"
+              >
+                <CheckCircle2 v-if="currentStep > step.num" class="h-3.5 w-3.5" />
+                <span v-else>{{ step.num }}</span>
+              </span>
+              <span class="whitespace-nowrap text-sm font-medium">{{ step.label }}</span>
+            </div>
+            <ArrowRight
+              v-if="idx < steps.length - 1"
+              class="h-4 w-4 shrink-0 text-slate-300"
+              :class="{ 'text-violet-400': currentStep > step.num }"
+            />
+          </template>
+        </div>
+        <!-- Next steps links (when upload complete) -->
+        <div v-if="successMessage" class="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+          <span class="text-xs text-slate-500">Seterusnya:</span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            @click="router.push('/integration/3rd-party/batch-processing')"
+          >
+            <Layers class="h-3.5 w-3.5" />
+            Batch Processing
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            @click="router.push('/integration/3rd-party/reconciliation')"
+          >
+            <RefreshCw class="h-3.5 w-3.5" />
+            Reconciliation
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            @click="router.push('/integration/3rd-party/reports')"
+          >
+            Report
+          </button>
+        </div>
       </div>
 
       <!-- Mode Toggle -->
@@ -400,7 +473,7 @@ onMounted(() => loadSources());
           </div>
 
           <p v-if="!selectedFile" class="mt-4 text-xs text-slate-500">
-            Supported: .txt, .enc, .gpg, .csv, .xlsx, .xls. Minimum 1000 transactions per file.
+            Supported: .txt, .enc, .gpg, .csv, .xlsx, .xls.
           </p>
           <div v-if="error" class="mt-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
             <AlertCircle class="h-4 w-4 shrink-0" />

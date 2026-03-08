@@ -3,6 +3,8 @@ import type {
   Category,
   CategoryInput,
   CorporatePayerInput,
+  SourceCategoryConfig,
+  SourceDataConfig,
   CounterDepositBatchDetail,
   CounterDepositBatchRow,
   CounterDepositStatus,
@@ -492,6 +494,9 @@ export async function saveSourceData(items: SourceDataConfig[]) {
   return apiRequest<{ data: { items: SourceDataConfig[] } }>("/api/settings/source-data", {
     method: "PUT",
     body: JSON.stringify({ items }),
+  });
+}
+
 // Counter + reconciliation
 export async function createCounterPayment(input: {
   guestName: string;

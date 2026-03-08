@@ -228,13 +228,9 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         icon: BarChart3,
         permission: "integration.reports",
       },
-      {
-        id: "integration-amil",
-        label: "Amil",
-        to: "/integration/3rd-party/amil",
-        icon: Users,
-        permission: "integration.view",
-      },
+    ],
+  },
+  {
     id: "kutipan-kaunter",
     label: "Kutipan Kaunter",
     items: [
@@ -275,6 +271,17 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         to: "/zakat-config/source-data",
         icon: Database,
         permission: "settings.view",
+      },
+      {
+        id: "amil",
+        label: "Amil",
+        to: "/integration/3rd-party/amil",
+        icon: Users,
+        permission: "settings.view",
+        children: [
+          { label: "Senarai", to: "/integration/3rd-party/amil" },
+          { label: "Daftar Baru", to: "/integration/3rd-party/amil/new" },
+        ],
       },
     ],
   },

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import pkg from "@prisma/client";
 const { SpgPayrollBatchStatus, SpgPayrollPaymentChannel } = pkg;
+import type { SpgPayrollBatchStatus as SpgPayrollBatchStatusType, SpgPayrollPaymentChannel as SpgPayrollPaymentChannelType } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";

@@ -4,10 +4,13 @@ import OpenAI from "openai";
 import { env } from "../config/env.js";
 import { prisma } from "../prisma.js";
 
-const DATE_TOLERANCE_DAYS = 7;
+/** Wider window so AI can suggest matches when GuestPayment was seeded earlier */
+const DATE_TOLERANCE_DAYS = 90;
 const AMOUNT_TOLERANCE = 0.02;
 const BATCH_SIZE = 10;
 const MAX_CANDIDATES_PER_ROW = 15;
+/** Same as apply-match: many-to-one allows linked total up to internalAmount * (1 + this) */
+const APPLY_AMOUNT_TOLERANCE = 0.01;
 
 function normalizeIc(ic: string | null): string {
   if (!ic) return "";
@@ -78,7 +81,8 @@ export async function getAISuggestionsForUnmatched(
         const minDate = txDate ? new Date(txDate.getTime() - DATE_TOLERANCE_DAYS * 24 * 60 * 60 * 1000) : null;
         const maxDate = txDate ? new Date(txDate.getTime() + DATE_TOLERANCE_DAYS * 24 * 60 * 60 * 1000) : null;
 
-        const candidates = await prisma.guestPayment.findMany({
+        const payerIc = normalizeIc(r.stagingTx.payerIc);
+        let candidates = await prisma.guestPayment.findMany({
           where: {
             status: "success",
             amount: {
@@ -90,7 +94,7 @@ export async function getAISuggestionsForUnmatched(
               : {}),
           },
           orderBy: { paidAt: "desc" },
-          take: MAX_CANDIDATES_PER_ROW,
+          take: MAX_CANDIDATES_PER_ROW * 2,
           select: {
             id: true,
             receiptNo: true,
@@ -100,6 +104,29 @@ export async function getAISuggestionsForUnmatched(
             paidAt: true,
           },
         });
+        // Fallback: if no candidates by amount+date, try by IC + amount (for AI-matchable rows with date outside window)
+        if (candidates.length === 0 && payerIc) {
+          const byIc = await prisma.guestPayment.findMany({
+            where: {
+              status: "success",
+              amount: {
+                gte: amount * (1 - AMOUNT_TOLERANCE),
+                lte: amount * (1 + AMOUNT_TOLERANCE),
+              },
+            },
+            orderBy: { paidAt: "desc" },
+            take: 50,
+            select: {
+              id: true,
+              receiptNo: true,
+              guestName: true,
+              identityNo: true,
+              amount: true,
+              paidAt: true,
+            },
+          });
+          candidates = byIc.filter((c) => normalizeIc(c.identityNo) === payerIc).slice(0, MAX_CANDIDATES_PER_ROW * 2);
+        }
 
         return {
           reconResultId: r.id,
@@ -122,6 +149,40 @@ export async function getAISuggestionsForUnmatched(
         };
       }),
     );
+
+    // Filter candidates by remaining amount (many-to-one) - single query for whole batch
+    const allCandidateIds = [...new Set(batchInputs.flatMap((b) => b.candidates.map((c) => c.id)))];
+    const internalTxIds = allCandidateIds.map((id) => `GuestPayment-${id}`);
+    const alreadyLinked =
+      internalTxIds.length > 0
+        ? await prisma.reconciliationResult.findMany({
+            where: {
+              internalTxId: { in: internalTxIds },
+              matchStatus: "MATCHED",
+            },
+            include: { stagingTx: { select: { amount: true } } },
+          })
+        : [];
+    const linkedTotals = new Map<string, number>();
+    for (const r of alreadyLinked) {
+      if (r.internalTxId) {
+        const cur = linkedTotals.get(r.internalTxId) ?? 0;
+        linkedTotals.set(r.internalTxId, cur + Number(r.stagingTx.amount));
+      }
+    }
+
+    const maxAllowedForAmount = (internalAmt: number) => internalAmt * (1 + APPLY_AMOUNT_TOLERANCE);
+    for (const b of batchInputs) {
+      const stagingAmount = b.staging.amount;
+      b.candidates = b.candidates
+        .filter((c) => {
+          const internalAmt = c.amount;
+          const linked = linkedTotals.get(`GuestPayment-${c.id}`) ?? 0;
+          const remaining = maxAllowedForAmount(internalAmt) - linked;
+          return remaining >= stagingAmount * (1 - 0.005);
+        })
+        .slice(0, MAX_CANDIDATES_PER_ROW);
+    }
 
     const batchWithCandidates = batchInputs.filter((b) => b.candidates.length > 0);
     const batchNoCandidates = batchInputs.filter((b) => b.candidates.length === 0);

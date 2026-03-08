@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import { FileUp, Layers, RefreshCw, AlertTriangle, BarChart3, Plug, Users } from "lucide-vue-next";
+import { FileUp, Layers, RefreshCw, AlertTriangle, BarChart3, Plug } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 
@@ -12,7 +12,6 @@ const modules = [
   { id: "reconciliation", label: "Reconciliation", desc: "Perform reconciliation with internal NKS records. Match external transactions with internal records.", to: "/integration/3rd-party/reconciliation", icon: RefreshCw },
   { id: "exceptions", label: "Exceptions", desc: "Review exceptions and approve/reprocess transactions.", to: "/integration/3rd-party/exceptions", icon: AlertTriangle },
   { id: "reports", label: "Reports", desc: "View processing and reconciliation reports.", to: "/integration/3rd-party/reports", icon: BarChart3 },
-  { id: "amil", label: "Amil", desc: "Manage Amil - list, view, edit, and delete.", to: "/integration/3rd-party/amil", icon: Users },
 ];
 </script>
 

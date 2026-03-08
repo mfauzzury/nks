@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, unref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Eye, Save, Search } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 import { createCounterDeposit, getCounterDeposit, listCounterDeposits, listCounterPayments } from "@/api/cms";
 import type { CounterDepositBatchDetail, CounterDepositBatchRow, CounterDepositType, CounterPaymentRow } from "@/types";
 
@@ -28,6 +29,7 @@ const paymentLimit = ref(20);
 const batches = ref<CounterDepositBatchRow[]>([]);
 const detailLoading = ref(false);
 const selectedBatch = ref<CounterDepositBatchDetail | null>(null);
+const dragBatchDetail = useDraggableModal();
 const batchPage = ref(1);
 const batchLimit = ref(20);
 
@@ -324,11 +326,18 @@ function nextBatchPage() {
         </div>
       </article>
 
-      <div v-if="selectedBatch" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" @click.self="selectedBatch = null">
-        <div class="w-full max-w-4xl rounded-xl bg-white p-4 shadow-xl">
-          <div class="mb-3 flex items-center justify-between">
+      <div v-if="selectedBatch" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" @click.self="selectedBatch = null; dragBatchDetail.resetPosition()">
+        <div
+          :ref="dragBatchDetail.modalRef"
+          :style="unref(dragBatchDetail.modalStyle)"
+          class="w-full max-w-4xl rounded-xl bg-white p-4 shadow-xl"
+        >
+          <div
+            class="mb-3 flex cursor-move items-center justify-between"
+            @mousedown="dragBatchDetail.onHandleMouseDown"
+          >
             <h2 class="text-base font-semibold text-slate-900">Detail Batch: {{ selectedBatch.referenceNo }}</h2>
-            <button class="rounded-lg border border-slate-300 px-2 py-1 text-sm" @click="selectedBatch = null">Tutup</button>
+            <button class="rounded-lg border border-slate-300 px-2 py-1 text-sm" @click="selectedBatch = null; dragBatchDetail.resetPosition()">Tutup</button>
           </div>
           <div v-if="detailLoading" class="py-8 text-center text-sm text-slate-500">Memuatkan...</div>
           <template v-else>

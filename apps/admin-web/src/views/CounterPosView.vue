@@ -1,4 +1,31 @@
 <script setup lang="ts">
+import { computed, onMounted, reactive, ref, unref } from "vue";
+import {
+  Banknote,
+  Check,
+  ChevronRight,
+  CreditCard,
+  Landmark,
+  Printer,
+  QrCode,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  UserPlus,
+  Wallet,
+  X,
+} from "lucide-vue-next";
+
+import { useAuthStore } from "@/stores/auth";
+import {
+  createCounterPayment,
+  getZakatTypes,
+  lookupPayerByIc,
+  quickRegisterPayer,
+} from "@/api/cms";
+import type { CounterPaymentChannel, ZakatTypeConfig } from "@/types";
+import { downloadReceiptPdf } from "@/utils/receipt-pdf";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { Check } from "lucide-vue-next";
 
@@ -48,6 +75,34 @@ const selectedPayer = ref({
   registered: false,
 });
 
+// Step 2: Payment
+const zakatTypes = ref<ZakatTypeConfig[]>([]);
+const paymentForm = reactive({
+  zakatType: "",
+  financialYear: String(new Date().getFullYear()),
+  amount: 0,
+  paymentChannel: "COUNTER_CASH" as CounterPaymentChannel,
+  collectionPoint: "Kaunter Utama",
+  notes: "",
+  rrn: "",
+  authCode: "",
+  tid: "",
+  mid: "",
+});
+const submitting = ref(false);
+const showZakatModal = ref(false);
+const dragZakatModal = useDraggableModal();
+
+// Bank-style amount input (cents-based)
+const amountCents = ref(0);
+const amountDisplay = computed(() => (amountCents.value / 100).toFixed(2));
+
+function onAmountKeydown(event: KeyboardEvent) {
+  if (event.key === "Backspace") {
+    event.preventDefault();
+    amountCents.value = Math.floor(amountCents.value / 10);
+    paymentForm.amount = amountCents.value / 100;
+    return;
 // Receipt data
 const receiptData = ref<ReceiptData | null>(null);
 
@@ -71,6 +126,13 @@ const steps = computed(() => {
       { key: "receipt", label: "Selesai & Resit" },
     ];
   }
+}
+
+function selectZakatType(name: string) {
+  paymentForm.zakatType = name;
+  showZakatModal.value = false;
+  dragZakatModal.resetPosition();
+}
   return [
     { key: "payer-type", label: "Jenis Pembayar" },
     { key: "ssm-lookup", label: "Carian Syarikat" },
@@ -314,6 +376,55 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
+
+    <!-- Zakat Type Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showZakatModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        @click.self="showZakatModal = false; dragZakatModal.resetPosition()"
+      >
+        <div
+          :ref="dragZakatModal.modalRef"
+          :style="unref(dragZakatModal.modalStyle)"
+          class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-100 px-6 py-4"
+            @mousedown="dragZakatModal.onHandleMouseDown"
+          >
+            <h3 class="text-lg font-bold text-slate-900">Pilih Jenis Zakat</h3>
+            <button
+              class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              @click="showZakatModal = false; dragZakatModal.resetPosition()"
+            >
+              <X class="h-5 w-5" />
+            </button>
+          </div>
+          <div class="p-4">
+            <div class="grid grid-cols-3 gap-3">
+              <button
+                v-for="zt in zakatTypes"
+                :key="zt.code"
+                class="flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3.5 text-center text-sm font-semibold transition-all"
+                :class="
+                  paymentForm.zakatType === zt.name
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50'
+                "
+                @click="selectZakatType(zt.name)"
+              >
+                <Check
+                  v-if="paymentForm.zakatType === zt.name"
+                  class="h-4 w-4 shrink-0 text-blue-600"
+                />
+                <span>{{ zt.name }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 

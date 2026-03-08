@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, unref } from "vue";
 import { useRouter } from "vue-router";
 import { Banknote, Hash, Monitor, PlusCircle, Search, TrendingUp, Users } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 import { getCounterPayment, listCounterPayments } from "@/api/cms";
 import type { CounterPaymentChannel, CounterPaymentRow, CounterReconStatus } from "@/types";
 
@@ -19,6 +20,7 @@ const limit = ref(20);
 const total = ref(0);
 
 const showReceipt = ref(false);
+const dragReceipt = useDraggableModal();
 const receiptLoading = ref(false);
 const selectedReceipt = ref<CounterPaymentRow | null>(null);
 
@@ -302,11 +304,19 @@ onMounted(load);
         </div>
       </article>
 
-      <div v-if="showReceipt" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" @click.self="showReceipt = false">
-        <div class="w-full max-w-2xl rounded-xl bg-white p-4 shadow-xl" id="counter-list-receipt-print">
-          <div class="mb-3 flex items-center justify-between">
+      <div v-if="showReceipt" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" @click.self="showReceipt = false; dragReceipt.resetPosition()">
+        <div
+          :ref="dragReceipt.modalRef"
+          :style="unref(dragReceipt.modalStyle)"
+          class="w-full max-w-2xl rounded-xl bg-white p-4 shadow-xl"
+          id="counter-list-receipt-print"
+        >
+          <div
+            class="mb-3 flex cursor-move items-center justify-between"
+            @mousedown="dragReceipt.onHandleMouseDown"
+          >
             <h2 class="text-base font-semibold text-slate-900">Resit Bayaran</h2>
-            <button class="rounded-lg border border-slate-300 px-2 py-1 text-sm" @click="showReceipt = false">Tutup</button>
+            <button class="rounded-lg border border-slate-300 px-2 py-1 text-sm" @click="showReceipt = false; dragReceipt.resetPosition()">Tutup</button>
           </div>
           <div v-if="receiptLoading" class="py-8 text-center text-sm text-slate-500">Memuatkan...</div>
           <template v-else-if="selectedReceipt">

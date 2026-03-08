@@ -124,10 +124,12 @@ watch(searchQuery, () => {
               <tr class="border-b border-slate-100 text-left">
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Run ID</th>
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Fail</th>
+                <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Sumber</th>
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Tarikh</th>
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Matched</th>
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Unmatched</th>
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Variance</th>
+                <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Duplicate</th>
                 <th class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
                 <th class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Tindakan
@@ -136,7 +138,7 @@ watch(searchQuery, () => {
             </thead>
             <tbody class="divide-y divide-slate-100">
               <tr v-if="loading">
-                <td colspan="8" class="px-4 py-12 text-center text-sm text-slate-500">
+                <td colspan="10" class="px-4 py-12 text-center text-sm text-slate-500">
                   <span class="inline-flex items-center gap-2">
                     <Loader2 class="h-5 w-5 animate-spin text-slate-400" />
                     Memuatkan...
@@ -144,7 +146,7 @@ watch(searchQuery, () => {
                 </td>
               </tr>
               <tr v-else-if="filteredRuns.length === 0">
-                <td colspan="8" class="px-4 py-12 text-center">
+                <td colspan="10" class="px-4 py-12 text-center">
                   <div class="inline-flex flex-col items-center gap-2 text-slate-600">
                     <p class="text-sm font-medium">Tiada rekod rekonsiliasi.</p>
                     <p class="max-w-sm text-xs text-slate-500">
@@ -161,6 +163,7 @@ watch(searchQuery, () => {
               >
                 <td class="px-4 py-2 font-mono text-slate-700">{{ r.runId }}</td>
                 <td class="px-4 py-2 text-slate-700">{{ r.fileName }}</td>
+                <td class="px-4 py-2 text-slate-600">{{ r.source ?? "—" }}</td>
                 <td class="px-4 py-2 text-slate-600">{{ formatDate(r.date) }}</td>
                 <td class="px-4 py-2">
                   <span class="font-medium text-emerald-600">{{ r.matched }}</span>
@@ -170,6 +173,9 @@ watch(searchQuery, () => {
                 </td>
                 <td class="px-4 py-2">
                   <span class="font-medium text-red-600">{{ r.mismatch }}</span>
+                </td>
+                <td class="px-4 py-2">
+                  <span class="font-medium text-orange-600">{{ r.duplicate }}</span>
                 </td>
                 <td class="px-4 py-2">
                   <span
