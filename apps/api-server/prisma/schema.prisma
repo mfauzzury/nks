@@ -535,6 +535,7 @@ model GuestPayment {
   depositBatch CounterDepositBatch? @relation(fields: [depositBatchId], references: [id], onDelete: SetNull)
 
   @@index([identityNo, paidAt])
+  @@index([status, paidAt])
   @@index([source, paidAt])
   @@index([reconStatus, paidAt])
   @@index([depositBatchId])

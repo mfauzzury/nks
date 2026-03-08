@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, unref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
   User,
@@ -20,6 +20,7 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 import {
   addToBlacklist,
   changePayerStatus,
@@ -235,6 +236,7 @@ function fmtDate(d: string) {
 }
 
 const selectedTx = ref<Transaction | null>(null);
+const dragTxModal = useDraggableModal();
 
 function openTxModal(tx: Transaction) {
   selectedTx.value = tx;
@@ -242,6 +244,7 @@ function openTxModal(tx: Transaction) {
 
 function closeTxModal() {
   selectedTx.value = null;
+  dragTxModal.resetPosition();
 }
 
 function escapePdfText(value: string) {
@@ -686,9 +689,16 @@ onMounted(load);
           <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeTxModal"></div>
 
           <!-- Modal Content -->
-          <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div
+            :ref="dragTxModal.modalRef"
+            :style="unref(dragTxModal.modalStyle)"
+            class="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
             <!-- Header -->
-            <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div
+              class="flex cursor-move items-center justify-between border-b border-slate-100 px-6 py-4"
+              @mousedown="dragTxModal.onHandleMouseDown"
+            >
               <div class="flex items-center gap-2.5">
                 <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-100 text-violet-600">
                   <ReceiptText class="h-4.5 w-4.5" />

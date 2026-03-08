@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, unref } from "vue";
 import {
   Banknote,
   Check,
@@ -25,6 +25,7 @@ import {
 } from "@/api/cms";
 import type { CounterPaymentChannel, ZakatTypeConfig } from "@/types";
 import { downloadReceiptPdf } from "@/utils/receipt-pdf";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 
 const auth = useAuthStore();
 
@@ -104,6 +105,7 @@ const paymentForm = reactive({
 });
 const submitting = ref(false);
 const showZakatModal = ref(false);
+const dragZakatModal = useDraggableModal();
 
 // Bank-style amount input (cents-based)
 const amountCents = ref(0);
@@ -130,6 +132,7 @@ function onAmountKeydown(event: KeyboardEvent) {
 function selectZakatType(name: string) {
   paymentForm.zakatType = name;
   showZakatModal.value = false;
+  dragZakatModal.resetPosition();
 }
 
 const showTerminalRef = computed(
@@ -812,14 +815,21 @@ onMounted(async () => {
       <div
         v-if="showZakatModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        @click.self="showZakatModal = false"
+        @click.self="showZakatModal = false; dragZakatModal.resetPosition()"
       >
-        <div class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl">
-          <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div
+          :ref="dragZakatModal.modalRef"
+          :style="unref(dragZakatModal.modalStyle)"
+          class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-100 px-6 py-4"
+            @mousedown="dragZakatModal.onHandleMouseDown"
+          >
             <h3 class="text-lg font-bold text-slate-900">Pilih Jenis Zakat</h3>
             <button
               class="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              @click="showZakatModal = false"
+              @click="showZakatModal = false; dragZakatModal.resetPosition()"
             >
               <X class="h-5 w-5" />
             </button>

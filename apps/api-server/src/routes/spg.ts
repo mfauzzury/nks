@@ -3,6 +3,7 @@ import path from "node:path";
 
 import pkg from "@prisma/client";
 const { SpgPayrollBatchStatus, SpgPayrollPaymentChannel } = pkg;
+import type { SpgPayrollBatchStatus as SpgPayrollBatchStatusType, SpgPayrollPaymentChannel as SpgPayrollPaymentChannelType } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
@@ -32,7 +33,7 @@ type PreviewRow = {
   duplicateInMonthBatch: boolean;
 };
 
-const ONLINE_CHANNELS = new Set<SpgPayrollPaymentChannel>([
+const ONLINE_CHANNELS = new Set<SpgPayrollPaymentChannelType>([
   SpgPayrollPaymentChannel.FPX_B2B,
   SpgPayrollPaymentChannel.CARD,
 ]);
@@ -329,7 +330,7 @@ spgRouter.post("/batches", slipUpload.single("supportingSlip"), async (req: Auth
   }
 
   const totalAmount = annotated.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const status: SpgPayrollBatchStatus = ONLINE_CHANNELS.has(input.paymentChannel)
+  const status: SpgPayrollBatchStatusType = ONLINE_CHANNELS.has(input.paymentChannel)
     ? SpgPayrollBatchStatus.awaiting_online_payment
     : SpgPayrollBatchStatus.pending_payment;
 
@@ -446,7 +447,7 @@ spgRouter.post("/batches/:batchId/pay/online/callback", async (req: AuthedReques
   const employer = await requirePortalEmployer(req, res, batch.employerPayerId);
   if (!employer) return;
 
-  const nextStatus: SpgPayrollBatchStatus = payload.result === "success"
+  const nextStatus: SpgPayrollBatchStatusType = payload.result === "success"
     ? SpgPayrollBatchStatus.paid_success
     : SpgPayrollBatchStatus.paid_failed;
 

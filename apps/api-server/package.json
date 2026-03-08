@@ -16,7 +16,14 @@
     "db:push": "prisma db push || npm run db:init",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "generate:jan-sample": "tsx scripts/generate-jan-sample-1200.ts"
+    "generate:jan-sample": "tsx scripts/generate-jan-sample-1200.ts",
+    "generate:psp-sample-1007": "tsx scripts/generate-psp-sample-1007.ts",
+    "generate:psp-sample-1008": "tsx scripts/generate-psp-sample-1008.ts",
+    "generate:jan-sample-1017": "tsx scripts/generate-jan-sample-1017.ts",
+    "generate:jan-sample-1017:seed": "tsx scripts/generate-jan-sample-1017.ts --seed-db",
+    "generate:jan-sample-1018": "tsx scripts/generate-jan-sample-1018.ts",
+    "generate:jan-sample-1018:seed": "tsx scripts/generate-jan-sample-1018.ts --seed-db",
+    "seed:exceptions": "tsx scripts/seed-exceptions-sample.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

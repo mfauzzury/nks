@@ -72,6 +72,233 @@ export async function uploadIntegrationFile(
   });
 }
 
+// -----------------------------------------------------------------------------
+// Reports
+// -----------------------------------------------------------------------------
+
+export interface ProcessingReport {
+  generatedAt: string;
+  dateRange: { from: string | null; to: string | null } | null;
+  summary: {
+    totalFiles: number;
+    byProcessingStatus: Record<string, number>;
+    byValidationStatus: Record<string, number>;
+    totalRecordsParsed: number;
+    totalAmountParsed: number;
+    totalRecordsDeclared: number;
+    totalAmountDeclared: number;
+  };
+  bySource: Array<{
+    sourceCode: string;
+    sourceName: string;
+    fileCount: number;
+    recordsParsed: number;
+    amountParsed: number;
+  }>;
+  recentFiles: Array<{
+    id: number;
+    fileName: string;
+    sourceCode: string | null;
+    sourceName: string | null;
+    receivedAt: string;
+    processingStatus: string;
+    validationStatus: string;
+    totalRecordsParsed: number | null;
+    totalAmountParsed: number | null;
+    errorSummary: string | null;
+  }>;
+}
+
+export async function getProcessingReport(params?: { from?: string; to?: string }) {
+  const search = new URLSearchParams();
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
+  const qs = search.toString();
+  return apiRequest<{ data: ProcessingReport }>(
+    `/api/integration/reports/processing${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export interface PayerReport {
+  generatedAt: string;
+  dateRange: { from: string | null; to: string | null } | null;
+  summary: {
+    totalPayers: number;
+    totalTransactions: number;
+    totalAmount: number;
+  };
+  payers: Array<{
+    payerIc: string | null;
+    payerName: string | null;
+    txCount: number;
+    totalAmount: number;
+    firstTxDate: string;
+    lastTxDate: string;
+    sources: string[];
+  }>;
+}
+
+export async function getPayerReport(params?: { from?: string; to?: string; limit?: number }) {
+  const search = new URLSearchParams();
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
+  if (params?.limit) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  return apiRequest<{ data: PayerReport }>(
+    `/api/integration/reports/payer${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export interface ReconciliationReport {
+  generatedAt: string;
+  dateRange: { from: string | null; to: string | null } | null;
+  summary: {
+    totalFiles: number;
+    totalStaging: number;
+    matched: number;
+    unmatched: number;
+    mismatch: number;
+    duplicate: number;
+    matchRate: number;
+  };
+  byFile: Array<{
+    fileId: number;
+    fileName: string;
+    sourceCode: string | null;
+    sourceName: string | null;
+    receivedAt: string;
+    totalStaging: number;
+    matched: number;
+    unmatched: number;
+    mismatch: number;
+    duplicate: number;
+  }>;
+  bySource: Array<{
+    sourceCode: string;
+    sourceName: string;
+    totalStaging: number;
+    matched: number;
+    unmatched: number;
+    mismatch: number;
+    duplicate: number;
+  }>;
+  exceptions: Array<{
+    id: number;
+    stagingTxId: number;
+    matchStatus: string;
+    exceptionCode: string | null;
+    exceptionDetail: string | null;
+    matchRule: string | null;
+    internalTxId: string | null;
+    payerIc: string | null;
+    payerName: string | null;
+    txDate: string;
+    amount: number;
+    sourceTxRef: string | null;
+    fileName: string | null;
+    sourceCode: string | null;
+  }>;
+}
+
+export async function getReconciliationReport(params?: { from?: string; to?: string; exceptionLimit?: number }) {
+  const search = new URLSearchParams();
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
+  if (params?.exceptionLimit) search.set("exceptionLimit", String(params.exceptionLimit));
+  const qs = search.toString();
+  return apiRequest<{ data: ReconciliationReport }>(
+    `/api/integration/reports/reconciliation${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export interface TrendsReport {
+  generatedAt: string;
+  dateRange: { from: string | null; to: string | null } | null;
+  groupBy: "day" | "week" | "month";
+  summary: {
+    totalFiles: number;
+    totalRecords: number;
+    totalAmount: number;
+    successCount: number;
+    successRate: number;
+    avgRecordsPerFile: number;
+  };
+  volumeByPeriod: Array<{
+    period: string;
+    fileCount: number;
+    recordCount: number;
+    amount: number;
+  }>;
+  bySource: Array<{
+    sourceCode: string;
+    sourceName: string;
+    categoryCode: string;
+    categoryName: string;
+    fileCount: number;
+    recordCount: number;
+    amount: number;
+    pctAmount: number;
+  }>;
+  byCategory: Array<{
+    categoryCode: string;
+    categoryName: string;
+    fileCount: number;
+    recordCount: number;
+    amount: number;
+    pctAmount: number;
+  }>;
+}
+
+export async function getTrendsReport(params?: { from?: string; to?: string; groupBy?: "day" | "week" | "month" }) {
+  const search = new URLSearchParams();
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
+  if (params?.groupBy) search.set("groupBy", params.groupBy);
+  const qs = search.toString();
+  return apiRequest<{ data: TrendsReport }>(
+    `/api/integration/reports/trends${qs ? `?${qs}` : ""}`,
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Exceptions
+// -----------------------------------------------------------------------------
+
+export interface ExceptionItem {
+  id: number;
+  stagingTxId: number;
+  matchStatus: string;
+  exceptionCode: string | null;
+  exceptionDetail: string | null;
+  matchRule: string | null;
+  internalTxId: string | null;
+  payerIc: string | null;
+  payerName: string | null;
+  txDate: string;
+  amount: number;
+  sourceTxRef: string | null;
+  fileName: string | null;
+  sourceCode: string | null;
+  sourceName: string | null;
+  createdAt: string;
+}
+
+export async function listExceptions(params?: {
+  limit?: number;
+  offset?: number;
+  status?: "pending" | "unmatched" | "mismatch";
+}) {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.status) search.set("status", params.status);
+  const qs = search.toString();
+  return apiRequest<{
+    data: ExceptionItem[];
+    meta: { total: number; limit: number; offset: number };
+  }>(`/api/integration/exceptions${qs ? `?${qs}` : ""}`);
+}
+
 export async function listIntegrationFiles(params?: { source?: string; limit?: number; offset?: number }) {
   const search = new URLSearchParams();
   if (params?.source) search.set("source", params.source);
@@ -166,6 +393,7 @@ export interface ReconciliationResultRow {
     txDate: string;
     amount: number;
     sourceTxRef: string | null;
+    duplicates?: Array<{ duplicateType: string; matchedStagingTxId: number | null; reason: string | null }>;
   };
   actions?: Array<{ id: number; actionType: string; actionNote: string | null; actedBy: string; actedAt: string }>;
   matchLinks?: Array<{ id: number; internalTxId: string; amountAllocated: number | null }>;
@@ -221,6 +449,90 @@ export interface SearchInternalResult {
   amount: number;
   date: string;
   linkedInfo: { linkedCount: number; linkedTotalAmount: number; remainingAmount: number };
+}
+
+export interface GuestPaymentForMatch extends SearchInternalResult {
+  identityNo?: string;
+  description?: string | null;
+}
+
+export type InternalSourceType = "BankStatement" | "GuestPayment";
+
+export interface InternalTxDetail {
+  type: string;
+  internalTxId: string;
+  reference: string;
+  name: string;
+  identityNo: string | null;
+  amount: number;
+  date: string;
+}
+
+export async function getInternalTxDetail(internalTxId: string) {
+  const params = new URLSearchParams({ internalTxId });
+  return apiRequest<{ data: InternalTxDetail }>(
+    `/api/integration/reconciliation/internal-detail?${params}`,
+  );
+}
+
+export interface StagingTxDetail extends InternalTxDetail {
+  fileName?: string | null;
+}
+
+export async function getStagingTxDetail(stagingTxId: number) {
+  const params = new URLSearchParams({ stagingTxId: String(stagingTxId) });
+  return apiRequest<{ data: StagingTxDetail }>(
+    `/api/integration/reconciliation/staging-detail?${params}`,
+  );
+}
+
+/** List BankStatementTransaction — fallback when internal-for-match returns empty for JAN/BANK */
+export async function listBankStatementForMatch(params?: {
+  limit?: number;
+  offset?: number;
+  search?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.search) search.set("search", params.search ?? "");
+  const qs = search.toString();
+  return apiRequest<{
+    data: GuestPaymentForMatch[];
+    meta: { total: number; limit: number; offset: number; internalSourceType: "BankStatement" };
+  }>(`/api/integration/reconciliation/bank-statement-list${qs ? `?${qs}` : ""}`);
+}
+
+export async function listGuestPaymentsForMatch(params?: {
+  limit?: number;
+  offset?: number;
+  search?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.search) search.set("search", params.search);
+  const qs = search.toString();
+  return apiRequest<{
+    data: GuestPaymentForMatch[];
+    meta: { total: number; limit: number; offset: number };
+  }>(`/api/integration/reconciliation/guest-payments${qs ? `?${qs}` : ""}`);
+}
+
+/** List internal records for Manual Match / N:1 / 1:N / N:M — GuestPayment for PSP, BankStatement for JAN/SPG/BANK */
+export async function listInternalForMatch(
+  fileId: number,
+  params?: { limit?: number; offset?: number; search?: string },
+) {
+  const search = new URLSearchParams({ fileId: String(fileId) });
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.search) search.set("search", params.search ?? "");
+  const qs = search.toString();
+  return apiRequest<{
+    data: GuestPaymentForMatch[];
+    meta: { total: number; limit: number; offset: number; internalSourceType?: InternalSourceType };
+  }>(`/api/integration/reconciliation/internal-for-match?${qs}`);
 }
 
 export async function searchInternalForMatch(fileId: number, q: string) {

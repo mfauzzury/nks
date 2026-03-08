@@ -293,6 +293,7 @@ async function main() {
   const sourceData = [
     { code: "JAN", name: "Jabatan Akauntan Negara", categoryCode: "SPG" },
     { code: "BILPIZ", name: "BilPiz", categoryCode: "PSP" },
+    { code: "AMIL_BILPIZ02", name: "Amil BilPiz 02", categoryCode: "PSP" },
     { code: "BANK_ISLAM", name: "Bank Islam", categoryCode: "BANK" },
     { code: "MAYBANK", name: "Maybank", categoryCode: "BANK" },
   ];
@@ -507,7 +508,33 @@ async function main() {
   const seedZakatTypes = ["ZAKAT PENDAPATAN", "ZAKAT SIMPANAN", "ZAKAT PERNIAGAAN", "ZAKAT EMAS", "ZAKAT FITRAH", "ZAKAT SAHAM", "ZAKAT KWSP", "ZAKAT KRIPTO"];
   const seedPayMethods = ["FPX", "CARD", "JOMPAY"];
 
+  const baseDate = new Date();
+  baseDate.setHours(0, 0, 0, 0);
+
   for (let i = 0; i < 20; i += 1) {
+    const identity = icNo(i + 1);
+    const receiptNo = `GRCPT-SEED-REG-${String(i + 1).padStart(3, "0")}`;
+    const zakatType = seedZakatTypes[i % seedZakatTypes.length];
+    const payMethod = seedPayMethods[i % seedPayMethods.length];
+
+    await prisma.guestPayment.upsert({
+      where: { receiptNo },
+      update: { paidAt: baseDate },
+      create: {
+        receiptNo,
+        guestName: muslimNames[i],
+        identityNo: identity,
+        email: `individu${i + 1}@contoh.my`,
+        amount: 50 + i * 5,
+        paymentMethod: `${payMethod} | ${zakatType}`,
+        status: "success",
+        paidAt: baseDate,
+      },
+    });
+  }
+
+  // Seed 630 more GuestPayment (021-650) for PSP sample 1007/1008/1009 reconciliation testing
+  for (let i = 20; i < 650; i += 1) {
     const identity = icNo(i + 1);
     const receiptNo = `GRCPT-SEED-REG-${String(i + 1).padStart(3, "0")}`;
     const zakatType = seedZakatTypes[i % seedZakatTypes.length];
@@ -518,12 +545,13 @@ async function main() {
       update: {},
       create: {
         receiptNo,
-        guestName: muslimNames[i],
+        guestName: muslimNames[i % muslimNames.length],
         identityNo: identity,
         email: `individu${i + 1}@contoh.my`,
-        amount: 50 + i * 5,
+        amount: 50 + (i % 100) * 5,
         paymentMethod: `${payMethod} | ${zakatType}`,
         status: "success",
+        paidAt: baseDate,
       },
     });
   }

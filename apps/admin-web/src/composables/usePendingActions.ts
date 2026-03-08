@@ -1,7 +1,7 @@
 import { onMounted, ref } from "vue";
 import { listDuplicateCases } from "@/api/cms";
 import { listPendingSpgPayrollBatches } from "@/api/cms";
-import { listIntegrationFiles } from "@/api/integration";
+import { listIntegrationFiles, listReconciliationRuns } from "@/api/integration";
 
 /**
  * Menu item IDs that can have pending actions requiring user attention.
@@ -46,6 +46,17 @@ async function fetchPendingCounts() {
   } catch {
     byId["integration-batch-processing"] = false;
     byRoute["/integration/3rd-party/batch-processing"] = false;
+  }
+
+  try {
+    const reconRes = await listReconciliationRuns({ limit: 100 });
+    const reconRuns = reconRes.data ?? [];
+    const reconPending = reconRuns.some((r) => r.status === "PENDING");
+    byId["integration-reconciliation"] = reconPending;
+    byRoute["/integration/3rd-party/reconciliation"] = reconPending;
+  } catch {
+    byId["integration-reconciliation"] = false;
+    byRoute["/integration/3rd-party/reconciliation"] = false;
   }
 
   byId["integration-exceptions"] = false;

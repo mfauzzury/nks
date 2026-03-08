@@ -4,6 +4,7 @@ import path from "node:path";
 
 import pkg from "@prisma/client";
 const { IntegrationFileType } = pkg;
+import type { IntegrationFileType as IntegrationFileTypeEnum } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 
@@ -136,20 +137,29 @@ integrationRouter.post("/files/upload", upload.single("file"), async (req: Authe
   }
 
   const validFileTypes = ["ENCRYPTED_TXT", "TXT", "CSV", "EXCEL"];
-  const fileType = validFileTypes.includes(fileTypeRaw) ? (fileTypeRaw as IntegrationFileType) : IntegrationFileType.ENCRYPTED_TXT;
+  const fileType = validFileTypes.includes(fileTypeRaw) ? (fileTypeRaw as IntegrationFileTypeEnum) : IntegrationFileType.ENCRYPTED_TXT;
 
   const columnMappingJson = String(req.body?.columnMappingJson ?? "").trim() || null;
   const aiDetectedSource = String(req.body?.aiDetectedSource ?? "").trim() || null;
   const aiConfidenceRaw = req.body?.aiConfidence;
   const aiConfidence = typeof aiConfidenceRaw === "number" ? aiConfidenceRaw : (typeof aiConfidenceRaw === "string" ? parseFloat(aiConfidenceRaw) : null);
 
+  // Reject if file with same name already exists
+  const existingByName = await prisma.integrationFile.findFirst({
+    where: { fileName: file.originalname },
+  });
+  if (existingByName) {
+    try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+    return sendError(res, 409, "DUPLICATE_FILE_NAME", `File "${file.originalname}" already exists. Use a different filename.`);
+  }
+
   const fileBuffer = fs.readFileSync(file.path);
   const fileHashSha256 = sha256Buffer(fileBuffer);
 
-  const existing = await prisma.integrationFile.findUnique({
+  const existingByHash = await prisma.integrationFile.findUnique({
     where: { fileHashSha256 },
   });
-  if (existing) {
+  if (existingByHash) {
     try { fs.unlinkSync(file.path); } catch { /* ignore */ }
     return sendError(res, 409, "DUPLICATE_FILE", "File with same content already uploaded (duplicate)");
   }
@@ -208,6 +218,554 @@ integrationRouter.get("/files", async (req, res) => {
   ]);
 
   return sendOk(res, files, { total, limit, offset });
+});
+
+// -----------------------------------------------------------------------------
+// Exceptions (Exception Queue for supervisor review)
+// -----------------------------------------------------------------------------
+
+integrationRouter.get("/exceptions", async (req, res) => {
+  const limit = Math.min(Number(req.query?.limit) || 50, 200);
+  const offset = Number(req.query?.offset) || 0;
+  const statusFilter = String(req.query?.status ?? "").trim().toLowerCase();
+  const matchStatuses: string[] =
+    statusFilter === "unmatched"
+      ? ["UNMATCHED"]
+      : statusFilter === "mismatch"
+        ? ["MISMATCH"]
+        : ["UNMATCHED", "MISMATCH"];
+
+  const where = { matchStatus: { in: matchStatuses } };
+
+  const [exceptions, total] = await Promise.all([
+    prisma.reconciliationResult.findMany({
+      where,
+      include: {
+        stagingTx: { include: { file: { include: { source: true } } } },
+      },
+      orderBy: { id: "desc" },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.reconciliationResult.count({ where }),
+  ]);
+
+  const items = exceptions.map((r) => ({
+    id: r.id,
+    stagingTxId: r.stagingTxId,
+    matchStatus: r.matchStatus,
+    exceptionCode: r.exceptionCode,
+    exceptionDetail: r.exceptionDetail,
+    matchRule: r.matchRule,
+    internalTxId: r.internalTxId,
+    payerIc: r.stagingTx.payerIc,
+    payerName: r.stagingTx.payerName,
+    txDate: r.stagingTx.txDate.toISOString().slice(0, 10),
+    amount: Number(r.stagingTx.amount),
+    sourceTxRef: r.stagingTx.sourceTxRef,
+    fileName: r.stagingTx.file?.fileName ?? null,
+    sourceCode: r.stagingTx.file?.source?.code ?? null,
+    sourceName: r.stagingTx.file?.source?.name ?? null,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  return sendOk(res, items, { total, limit, offset });
+});
+
+// -----------------------------------------------------------------------------
+// Reports
+// -----------------------------------------------------------------------------
+
+integrationRouter.get("/reports/processing", async (req, res) => {
+  const fromDate = req.query?.from ? String(req.query.from).trim() : null;
+  const toDate = req.query?.to ? String(req.query.to).trim() : null;
+
+  const where: { receivedAt?: { gte?: Date; lte?: Date } } = {};
+  if (fromDate) {
+    const d = new Date(fromDate);
+    if (!Number.isNaN(d.getTime())) where.receivedAt = { ...where.receivedAt, gte: d };
+  }
+  if (toDate) {
+    const d = new Date(toDate);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      where.receivedAt = { ...where.receivedAt, lte: d };
+    }
+  }
+
+  const files = await prisma.integrationFile.findMany({
+    where: Object.keys(where).length > 0 ? where : undefined,
+    include: {
+      source: { include: { category: true } },
+      _count: { select: { stagingTxs: true } },
+    },
+    orderBy: { receivedAt: "desc" },
+  });
+
+  const byProcessingStatus = { PENDING: 0, IN_PROGRESS: 0, SUCCESS: 0, FAILED: 0 };
+  const byValidationStatus = { PENDING: 0, PASSED: 0, FAILED: 0 };
+  let totalRecordsParsed = 0;
+  let totalAmountParsed = 0;
+  let totalRecordsDeclared = 0;
+  let totalAmountDeclared = 0;
+
+  const sourceMap = new Map<string, { sourceCode: string; sourceName: string; fileCount: number; recordsParsed: number; amountParsed: number }>();
+
+  for (const f of files) {
+    const status = f.processingStatus as keyof typeof byProcessingStatus;
+    if (status in byProcessingStatus) byProcessingStatus[status]++;
+
+    const valStatus = f.validationStatus as keyof typeof byValidationStatus;
+    if (valStatus in byValidationStatus) byValidationStatus[valStatus]++;
+
+    const records = f.totalRecordsParsed ?? f._count.stagingTxs ?? 0;
+    const amount = Number(f.totalAmountParsed ?? 0);
+    totalRecordsParsed += records;
+    totalAmountParsed += amount;
+    totalRecordsDeclared += f.totalRecordsDeclared ?? 0;
+    totalAmountDeclared += Number(f.totalAmountDeclared ?? 0);
+
+    const src = f.source;
+    if (src) {
+      const key = src.code;
+      const existing = sourceMap.get(key);
+      if (existing) {
+        existing.fileCount++;
+        existing.recordsParsed += records;
+        existing.amountParsed += amount;
+      } else {
+        sourceMap.set(key, {
+          sourceCode: src.code,
+          sourceName: src.name,
+          fileCount: 1,
+          recordsParsed: records,
+          amountParsed: amount,
+        });
+      }
+    }
+  }
+
+  const bySource = Array.from(sourceMap.values()).sort((a, b) => a.sourceCode.localeCompare(b.sourceCode));
+
+  const recentFiles = files.slice(0, 20).map((f) => ({
+    id: f.id,
+    fileName: f.fileName,
+    sourceCode: f.source?.code ?? null,
+    sourceName: f.source?.name ?? null,
+    receivedAt: f.receivedAt.toISOString(),
+    processingStatus: f.processingStatus,
+    validationStatus: f.validationStatus,
+    totalRecordsParsed: f.totalRecordsParsed ?? f._count.stagingTxs ?? null,
+    totalAmountParsed: f.totalAmountParsed != null ? Number(f.totalAmountParsed) : null,
+    errorSummary: f.errorSummary,
+  }));
+
+  return sendOk(res, {
+    generatedAt: new Date().toISOString(),
+    dateRange: fromDate || toDate ? { from: fromDate ?? null, to: toDate ?? null } : null,
+    summary: {
+      totalFiles: files.length,
+      byProcessingStatus,
+      byValidationStatus,
+      totalRecordsParsed,
+      totalAmountParsed,
+      totalRecordsDeclared,
+      totalAmountDeclared,
+    },
+    bySource,
+    recentFiles,
+  });
+});
+
+integrationRouter.get("/reports/payer", async (req, res) => {
+  const fromDate = req.query?.from ? String(req.query.from).trim() : null;
+  const toDate = req.query?.to ? String(req.query.to).trim() : null;
+  const limit = Math.min(Number(req.query?.limit) || 100, 500);
+
+  const txWhere: { txDate?: { gte?: Date; lte?: Date } } = {};
+  if (fromDate) {
+    const d = new Date(fromDate);
+    if (!Number.isNaN(d.getTime())) txWhere.txDate = { ...txWhere.txDate, gte: d };
+  }
+  if (toDate) {
+    const d = new Date(toDate);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      txWhere.txDate = { ...txWhere.txDate, lte: d };
+    }
+  }
+
+  const stagingTxs = await prisma.integrationStagingTx.findMany({
+    where: {
+      ...txWhere,
+      file: { processingStatus: "SUCCESS" },
+    },
+    include: {
+      file: { include: { source: true } },
+    },
+  });
+
+  const payerMap = new Map<
+    string,
+    { payerIc: string | null; payerName: string | null; txCount: number; totalAmount: number; firstTx: Date; lastTx: Date; sources: Set<string> }
+  >();
+
+  for (const st of stagingTxs) {
+    const key = (st.payerIc ?? "").trim() || (st.payerName ?? "").trim() || "—";
+    const existing = payerMap.get(key);
+    const amt = Number(st.amount);
+    const src = st.file?.source?.code ?? null;
+
+    if (existing) {
+      existing.txCount++;
+      existing.totalAmount += amt;
+      if (st.txDate < existing.firstTx) existing.firstTx = st.txDate;
+      if (st.txDate > existing.lastTx) existing.lastTx = st.txDate;
+      if (src) existing.sources.add(src);
+    } else {
+      payerMap.set(key, {
+        payerIc: st.payerIc,
+        payerName: st.payerName,
+        txCount: 1,
+        totalAmount: amt,
+        firstTx: st.txDate,
+        lastTx: st.txDate,
+        sources: new Set(src ? [src] : []),
+      });
+    }
+  }
+
+  const payers = Array.from(payerMap.values())
+    .map((p) => ({
+      payerIc: p.payerIc,
+      payerName: p.payerName,
+      txCount: p.txCount,
+      totalAmount: p.totalAmount,
+      firstTxDate: p.firstTx.toISOString().slice(0, 10),
+      lastTxDate: p.lastTx.toISOString().slice(0, 10),
+      sources: Array.from(p.sources).sort(),
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount)
+    .slice(0, limit);
+
+  let totalTransactions = 0;
+  let totalAmount = 0;
+  for (const p of payerMap.values()) {
+    totalTransactions += p.txCount;
+    totalAmount += p.totalAmount;
+  }
+
+  return sendOk(res, {
+    generatedAt: new Date().toISOString(),
+    dateRange: fromDate || toDate ? { from: fromDate ?? null, to: toDate ?? null } : null,
+    summary: {
+      totalPayers: payerMap.size,
+      totalTransactions,
+      totalAmount,
+    },
+    payers,
+  });
+});
+
+integrationRouter.get("/reports/reconciliation", async (req, res) => {
+  const fromDate = req.query?.from ? String(req.query.from).trim() : null;
+  const toDate = req.query?.to ? String(req.query.to).trim() : null;
+  const exceptionLimit = Math.min(Number(req.query?.exceptionLimit) || 50, 200);
+
+  const fileWhere: { receivedAt?: { gte?: Date; lte?: Date } } = {};
+  if (fromDate) {
+    const d = new Date(fromDate);
+    if (!Number.isNaN(d.getTime())) fileWhere.receivedAt = { ...fileWhere.receivedAt, gte: d };
+  }
+  if (toDate) {
+    const d = new Date(toDate);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      fileWhere.receivedAt = { ...fileWhere.receivedAt, lte: d };
+    }
+  }
+
+  const files = await prisma.integrationFile.findMany({
+    where: { processingStatus: "SUCCESS", ...(Object.keys(fileWhere).length > 0 ? fileWhere : {}) },
+    include: {
+      source: { include: { category: true } },
+      stagingTxs: { select: { id: true } },
+    },
+    orderBy: { receivedAt: "desc" },
+  });
+
+  const byFile: Array<{
+    fileId: number;
+    fileName: string;
+    sourceCode: string | null;
+    sourceName: string | null;
+    receivedAt: string;
+    totalStaging: number;
+    matched: number;
+    unmatched: number;
+    mismatch: number;
+    duplicate: number;
+  }> = [];
+
+  const sourceMap = new Map<string, { sourceCode: string; sourceName: string; totalStaging: number; matched: number; unmatched: number; mismatch: number; duplicate: number }>();
+
+  let totalStaging = 0;
+  let totalMatched = 0;
+  let totalUnmatched = 0;
+  let totalMismatch = 0;
+  let totalDuplicate = 0;
+
+  const allStagingIds: number[] = [];
+
+  for (const f of files) {
+    const stagingIds = f.stagingTxs.map((s) => s.id);
+    allStagingIds.push(...stagingIds);
+
+    const [matched, unmatched, mismatch, duplicate] = await Promise.all([
+      prisma.reconciliationResult.count({ where: { stagingTxId: { in: stagingIds }, matchStatus: "MATCHED" } }),
+      prisma.reconciliationResult.count({ where: { stagingTxId: { in: stagingIds }, matchStatus: "UNMATCHED" } }),
+      prisma.reconciliationResult.count({ where: { stagingTxId: { in: stagingIds }, matchStatus: "MISMATCH" } }),
+      prisma.reconciliationResult.count({ where: { stagingTxId: { in: stagingIds }, matchStatus: "DUPLICATE" } }),
+    ]);
+
+    totalStaging += stagingIds.length;
+    totalMatched += matched;
+    totalUnmatched += unmatched;
+    totalMismatch += mismatch;
+    totalDuplicate += duplicate;
+
+    byFile.push({
+      fileId: f.id,
+      fileName: f.fileName,
+      sourceCode: f.source?.code ?? null,
+      sourceName: f.source?.name ?? null,
+      receivedAt: f.receivedAt.toISOString(),
+      totalStaging: stagingIds.length,
+      matched,
+      unmatched,
+      mismatch,
+      duplicate,
+    });
+
+    const src = f.source;
+    if (src) {
+      const existing = sourceMap.get(src.code);
+      if (existing) {
+        existing.totalStaging += stagingIds.length;
+        existing.matched += matched;
+        existing.unmatched += unmatched;
+        existing.mismatch += mismatch;
+        existing.duplicate += duplicate;
+      } else {
+        sourceMap.set(src.code, {
+          sourceCode: src.code,
+          sourceName: src.name,
+          totalStaging: stagingIds.length,
+          matched,
+          unmatched,
+          mismatch,
+          duplicate,
+        });
+      }
+    }
+  }
+
+  const bySource = Array.from(sourceMap.values()).sort((a, b) => a.sourceCode.localeCompare(b.sourceCode));
+
+  const exceptions = await prisma.reconciliationResult.findMany({
+    where: {
+      stagingTxId: { in: allStagingIds },
+      matchStatus: { in: ["UNMATCHED", "MISMATCH"] },
+    },
+    include: {
+      stagingTx: { include: { file: { include: { source: true } } } },
+    },
+    orderBy: { id: "desc" },
+    take: exceptionLimit,
+  });
+
+  const exceptionsFormatted = exceptions.map((r) => ({
+    id: r.id,
+    stagingTxId: r.stagingTxId,
+    matchStatus: r.matchStatus,
+    exceptionCode: r.exceptionCode,
+    exceptionDetail: r.exceptionDetail,
+    matchRule: r.matchRule,
+    internalTxId: r.internalTxId,
+    payerIc: r.stagingTx.payerIc,
+    payerName: r.stagingTx.payerName,
+    txDate: r.stagingTx.txDate.toISOString().slice(0, 10),
+    amount: Number(r.stagingTx.amount),
+    sourceTxRef: r.stagingTx.sourceTxRef,
+    fileName: r.stagingTx.file?.fileName ?? null,
+    sourceCode: r.stagingTx.file?.source?.code ?? null,
+  }));
+
+  const matchRate = totalStaging > 0 ? Math.round((totalMatched / totalStaging) * 100) : 0;
+
+  return sendOk(res, {
+    generatedAt: new Date().toISOString(),
+    dateRange: fromDate || toDate ? { from: fromDate ?? null, to: toDate ?? null } : null,
+    summary: {
+      totalFiles: files.length,
+      totalStaging,
+      matched: totalMatched,
+      unmatched: totalUnmatched,
+      mismatch: totalMismatch,
+      duplicate: totalDuplicate,
+      matchRate,
+    },
+    byFile,
+    bySource,
+    exceptions: exceptionsFormatted,
+  });
+});
+
+integrationRouter.get("/reports/trends", async (req, res) => {
+  const fromDate = req.query?.from ? String(req.query.from).trim() : null;
+  const toDate = req.query?.to ? String(req.query.to).trim() : null;
+  const groupBy = (req.query?.groupBy as string) || "day";
+  const validGroup = ["day", "week", "month"].includes(groupBy) ? groupBy : "day";
+
+  const fileWhere: { receivedAt?: { gte?: Date; lte?: Date } } = {};
+  if (fromDate) {
+    const d = new Date(fromDate);
+    if (!Number.isNaN(d.getTime())) fileWhere.receivedAt = { ...fileWhere.receivedAt, gte: d };
+  }
+  if (toDate) {
+    const d = new Date(toDate);
+    if (!Number.isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      fileWhere.receivedAt = { ...fileWhere.receivedAt, lte: d };
+    }
+  }
+
+  const files = await prisma.integrationFile.findMany({
+    where: Object.keys(fileWhere).length > 0 ? fileWhere : undefined,
+    include: {
+      source: { include: { category: true } },
+      _count: { select: { stagingTxs: true } },
+    },
+    orderBy: { receivedAt: "asc" },
+  });
+
+  function getPeriodKey(d: Date): string {
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const day = d.getDate();
+    if (validGroup === "month") return `${y}-${String(m + 1).padStart(2, "0")}`;
+    if (validGroup === "week") {
+      const start = new Date(d);
+      start.setDate(day - start.getDay());
+      return start.toISOString().slice(0, 10);
+    }
+    return d.toISOString().slice(0, 10);
+  }
+
+  const periodMap = new Map<string, { fileCount: number; recordCount: number; amount: number }>();
+  const sourceMap = new Map<string, { sourceCode: string; sourceName: string; categoryCode: string; categoryName: string; fileCount: number; recordCount: number; amount: number }>();
+  const categoryMap = new Map<string, { categoryCode: string; categoryName: string; fileCount: number; recordCount: number; amount: number }>();
+
+  let totalFiles = 0;
+  let totalRecords = 0;
+  let totalAmount = 0;
+  let successCount = 0;
+
+  for (const f of files) {
+    const key = getPeriodKey(f.receivedAt);
+    const records = f.totalRecordsParsed ?? f._count.stagingTxs ?? 0;
+    const amount = Number(f.totalAmountParsed ?? 0);
+
+    const existing = periodMap.get(key);
+    if (existing) {
+      existing.fileCount++;
+      existing.recordCount += records;
+      existing.amount += amount;
+    } else {
+      periodMap.set(key, { fileCount: 1, recordCount: records, amount });
+    }
+
+    totalFiles++;
+    totalRecords += records;
+    totalAmount += amount;
+    if (f.processingStatus === "SUCCESS") successCount++;
+
+    const src = f.source;
+    if (src) {
+      const key = src.code;
+      const existingSrc = sourceMap.get(key);
+      if (existingSrc) {
+        existingSrc.fileCount++;
+        existingSrc.recordCount += records;
+        existingSrc.amount += amount;
+      } else {
+        sourceMap.set(key, {
+          sourceCode: src.code,
+          sourceName: src.name,
+          categoryCode: src.category?.code ?? "—",
+          categoryName: src.category?.name ?? "—",
+          fileCount: 1,
+          recordCount: records,
+          amount,
+        });
+      }
+
+      const catCode = src.category?.code ?? "—";
+      const catName = src.category?.name ?? "—";
+      const existingCat = categoryMap.get(catCode);
+      if (existingCat) {
+        existingCat.fileCount++;
+        existingCat.recordCount += records;
+        existingCat.amount += amount;
+      } else {
+        categoryMap.set(catCode, {
+          categoryCode: catCode,
+          categoryName: catName,
+          fileCount: 1,
+          recordCount: records,
+          amount,
+        });
+      }
+    }
+  }
+
+  const volumeByPeriod = Array.from(periodMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([period, data]) => ({ period, ...data }));
+
+  const bySource = Array.from(sourceMap.values())
+    .sort((a, b) => b.amount - a.amount)
+    .map((s) => ({
+      ...s,
+      pctAmount: totalAmount > 0 ? Math.round((s.amount / totalAmount) * 100) : 0,
+    }));
+
+  const byCategory = Array.from(categoryMap.values())
+    .sort((a, b) => b.amount - a.amount)
+    .map((c) => ({
+      ...c,
+      pctAmount: totalAmount > 0 ? Math.round((c.amount / totalAmount) * 100) : 0,
+    }));
+
+  const successRate = totalFiles > 0 ? Math.round((successCount / totalFiles) * 100) : 0;
+  const avgRecordsPerFile = totalFiles > 0 ? Math.round(totalRecords / totalFiles) : 0;
+
+  return sendOk(res, {
+    generatedAt: new Date().toISOString(),
+    dateRange: fromDate || toDate ? { from: fromDate ?? null, to: toDate ?? null } : null,
+    groupBy: validGroup,
+    summary: {
+      totalFiles,
+      totalRecords,
+      totalAmount,
+      successCount,
+      successRate,
+      avgRecordsPerFile,
+    },
+    volumeByPeriod,
+    bySource,
+    byCategory,
+  });
 });
 
 integrationRouter.delete("/files/:id", async (req: AuthedRequest, res) => {
@@ -386,7 +944,7 @@ integrationRouter.get("/reconciliation/runs/:fileId/results", async (req, res) =
   const results = await prisma.reconciliationResult.findMany({
     where: { stagingTx: { fileId } },
     include: {
-      stagingTx: true,
+      stagingTx: { include: { duplicates: true, file: { select: { fileName: true } } } },
       actions: { orderBy: { actedAt: "desc" } },
       matchLinks: true,
     },
@@ -492,10 +1050,8 @@ integrationRouter.get("/reconciliation/search-internal", async (req: AuthedReque
     return sendError(res, 404, "FILE_NOT_FOUND", "File not found");
   }
 
-  const categoryCode = file.source?.category?.code ?? null;
-  const useBankStatement = categoryCode === "SPG" || categoryCode === "BANK";
-  const useGuestPayment = categoryCode === "PSP" || !useBankStatement;
-
+  // Always search both GuestPayment and BankStatement - internal records may exist
+  // in either table regardless of the file's source category (PSP/SPG/BANK)
   const results: Array<{
     internalTxId: string;
     reference: string;
@@ -505,12 +1061,18 @@ integrationRouter.get("/reconciliation/search-internal", async (req: AuthedReque
     linkedInfo: { linkedCount: number; linkedTotalAmount: number; remainingAmount: number };
   }> = [];
 
-  if (useGuestPayment && q.length >= 2) {
-    const where: object[] = [
-      { receiptNo: { contains: q } },
-      { guestName: { contains: q } },
-      { identityNo: { contains: q.replace(/\D/g, "") } },
-    ];
+  const digitsOnly = q.replace(/\D/g, "");
+  const guestWhere =
+    digitsOnly.length >= 2
+      ? [
+          { receiptNo: { contains: q } },
+          { guestName: { contains: q } },
+          { identityNo: { contains: digitsOnly } },
+        ]
+      : [{ receiptNo: { contains: q } }, { guestName: { contains: q } }];
+
+  if (q.length >= 2) {
+    const where: object[] = guestWhere;
     const payments = await prisma.guestPayment.findMany({
       where: { status: "success", OR: where },
       orderBy: { paidAt: "desc" },
@@ -540,7 +1102,7 @@ integrationRouter.get("/reconciliation/search-internal", async (req: AuthedReque
     }
   }
 
-  if (useBankStatement && q.length >= 2) {
+  if (q.length >= 2) {
     const where: object[] = [
       { paymentReference: { contains: q } },
       { counterparty: { contains: q } },
@@ -575,10 +1137,433 @@ integrationRouter.get("/reconciliation/search-internal", async (req: AuthedReque
     }
   }
 
-  return sendOk(res, { data: results });
+  return sendOk(res, results);
 });
 
-const AMOUNT_TOLERANCE = 0.02; // 2% for many-to-one validation
+const SOURCES_USE_GUEST_PAYMENT = ["PSP"];
+const SOURCES_USE_BANK_STATEMENT = ["SPG", "BANK"];
+const SOURCE_CODES_USE_BANK_STATEMENT = ["JAN", "BANK_ISLAM", "MAYBANK"]; // fallback: use BankStatement
+const SOURCE_CODES_USE_GUEST_PAYMENT = ["BILPIZ", "AMIL_BILPIZ02"]; // fallback: use GuestPayment (PSP)
+
+// List internal records for Manual Match / N:1 / 1:N / N:M — GuestPayment for PSP, BankStatement for JAN/SPG/BANK
+integrationRouter.get("/reconciliation/internal-for-match", async (req: AuthedRequest, res) => {
+  const fileId = Number(req.query?.fileId ?? 0);
+  const limit = Math.min(Number(req.query?.limit) || 50, 200);
+  const offset = Number(req.query?.offset) ?? 0;
+  const q = String(req.query?.search ?? "").trim();
+
+  if (!Number.isInteger(fileId) || fileId < 1) {
+    return sendError(res, 400, "INVALID_FILE_ID", "fileId is required");
+  }
+
+  const file = await prisma.integrationFile.findUnique({
+    where: { id: fileId },
+    include: { source: { include: { category: true } } },
+  });
+  if (!file) {
+    return sendError(res, 404, "FILE_NOT_FOUND", "File not found");
+  }
+
+  const categoryCode = file.source?.category?.code ?? null;
+  const sourceCode = (file.source?.code ?? "").trim();
+  const sourceCodeUpper = sourceCode.toUpperCase();
+  // Prefer source-code fallbacks (case-insensitive); then category
+  const useBankStatement =
+    SOURCE_CODES_USE_GUEST_PAYMENT.some((c) => c.toUpperCase() === sourceCodeUpper)
+      ? false
+      : SOURCE_CODES_USE_BANK_STATEMENT.some((c) => c.toUpperCase() === sourceCodeUpper) ||
+        SOURCES_USE_BANK_STATEMENT.includes(categoryCode ?? "") ||
+        SOURCE_CODES_USE_BANK_STATEMENT.includes(sourceCode);
+
+  const resultShape = {
+    internalTxId: "",
+    reference: "",
+    name: "",
+    identityNo: "" as string | null,
+    amount: 0,
+    date: "",
+    description: null as string | null,
+    linkedInfo: { linkedCount: 0, linkedTotalAmount: 0, remainingAmount: 0 },
+  };
+
+  if (useBankStatement) {
+    const where: { OR?: object[] } = {};
+    if (q.length >= 1) {
+      where.OR = [
+        { paymentReference: { contains: q } },
+        { counterparty: { contains: q } },
+        { description: { contains: q } },
+      ];
+    }
+    const FETCH_BATCH = 200;
+    const allFiltered: typeof resultShape[] = [];
+    let dbSkip = 0;
+
+    while (true) {
+      const txs = await prisma.bankStatementTransaction.findMany({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        orderBy: { valueDate: "desc" },
+        take: FETCH_BATCH,
+        skip: dbSkip,
+        select: { id: true, paymentReference: true, counterparty: true, amount: true, valueDate: true, description: true },
+      });
+      if (txs.length === 0) break;
+
+      const internalTxIds = txs.map((t) => `BankStatementTransaction-${t.id}`);
+      const linkedRows = await prisma.reconciliationResult.findMany({
+        where: { internalTxId: { in: internalTxIds }, matchStatus: "MATCHED" },
+        include: { stagingTx: { select: { amount: true } } },
+      });
+      const linkedByInternal = new Map<string, { total: number; count: number }>();
+      for (const r of linkedRows) {
+        if (r.internalTxId) {
+          const cur = linkedByInternal.get(r.internalTxId) ?? { total: 0, count: 0 };
+          cur.total += Number(r.stagingTx.amount);
+          cur.count += 1;
+          linkedByInternal.set(r.internalTxId, cur);
+        }
+      }
+
+      for (const t of txs) {
+        const internalTxId = `BankStatementTransaction-${t.id}`;
+        const linked = linkedByInternal.get(internalTxId) ?? { total: 0, count: 0 };
+        const internalAmount = Number(t.amount);
+        const remainingAmount = Math.max(0, internalAmount - linked.total);
+        // Show all records (including fully-matched) so user can see data; selection disabled when remainingAmount insufficient
+        allFiltered.push({
+          internalTxId,
+          reference: t.paymentReference ?? t.counterparty ?? "—",
+          name: t.counterparty ?? "—",
+          identityNo: null,
+          amount: internalAmount,
+          date: t.valueDate.toISOString().slice(0, 10),
+          description: t.description ?? null,
+          linkedInfo: {
+            linkedCount: linked.count,
+            linkedTotalAmount: linked.total,
+            remainingAmount,
+          },
+        });
+      }
+      dbSkip += txs.length;
+      if (txs.length < FETCH_BATCH) break;
+    }
+
+    const results = allFiltered.slice(offset, offset + limit);
+    const total = allFiltered.length;
+    return sendOk(res, results, {
+      total,
+      limit,
+      offset,
+      internalSourceType: "BankStatement",
+      _debug: { sourceCode, categoryCode, useBankStatement: true },
+    });
+  }
+
+  // PSP: GuestPayment
+  const where: { status: string; OR?: object[] } = { status: "success" };
+  if (q.length >= 1) {
+    const digitsOnly = q.replace(/\D/g, "");
+    where.OR =
+      digitsOnly.length >= 1
+        ? [
+            { receiptNo: { contains: q } },
+            { guestName: { contains: q } },
+            { identityNo: { contains: digitsOnly } },
+          ]
+        : [{ receiptNo: { contains: q } }, { guestName: { contains: q } }];
+  }
+
+  const FETCH_BATCH = 200;
+  const allFiltered: typeof resultShape[] = [];
+  let dbSkip = 0;
+
+  while (true) {
+    const payments = await prisma.guestPayment.findMany({
+      where,
+      orderBy: { paidAt: "desc" },
+      take: FETCH_BATCH,
+      skip: dbSkip,
+      select: { id: true, receiptNo: true, guestName: true, identityNo: true, amount: true, paidAt: true },
+    });
+    if (payments.length === 0) break;
+
+    const internalTxIds = payments.map((p) => `GuestPayment-${p.id}`);
+    const linkedRows = await prisma.reconciliationResult.findMany({
+      where: { internalTxId: { in: internalTxIds }, matchStatus: "MATCHED" },
+      include: { stagingTx: { select: { amount: true } } },
+    });
+    const linkedByInternal = new Map<string, { total: number; count: number }>();
+    for (const r of linkedRows) {
+      if (r.internalTxId) {
+        const cur = linkedByInternal.get(r.internalTxId) ?? { total: 0, count: 0 };
+        cur.total += Number(r.stagingTx.amount);
+        cur.count += 1;
+        linkedByInternal.set(r.internalTxId, cur);
+      }
+    }
+
+    for (const p of payments) {
+      const internalTxId = `GuestPayment-${p.id}`;
+      const linked = linkedByInternal.get(internalTxId) ?? { total: 0, count: 0 };
+      const internalAmount = Number(p.amount);
+      const remainingAmount = Math.max(0, internalAmount - linked.total);
+      if (remainingAmount === 0 && linked.count > 0) continue;
+      allFiltered.push({
+        internalTxId,
+        reference: p.receiptNo,
+        name: p.guestName,
+        identityNo: p.identityNo,
+        amount: internalAmount,
+        date: p.paidAt.toISOString().slice(0, 10),
+        description: null,
+        linkedInfo: {
+          linkedCount: linked.count,
+          linkedTotalAmount: linked.total,
+          remainingAmount,
+        },
+      });
+    }
+    dbSkip += payments.length;
+    if (payments.length < FETCH_BATCH) break;
+  }
+
+  const results = allFiltered.slice(offset, offset + limit);
+  const total = allFiltered.length;
+  return sendOk(res, results, {
+    total,
+    limit,
+    offset,
+    internalSourceType: "GuestPayment",
+    _debug: { sourceCode, categoryCode, useBankStatement: false },
+  });
+});
+
+// List BankStatementTransaction for JAN/BANK — legacy fallback when internal-for-match returns empty
+integrationRouter.get("/reconciliation/bank-statement-list", async (req: AuthedRequest, res) => {
+  const limit = Math.min(Number(req.query?.limit) || 50, 200);
+  const offset = Math.max(0, Math.floor(Number(req.query?.offset) || 0));
+  const q = String(req.query?.search ?? "").trim();
+
+  const where: { OR?: object[] } = {};
+  if (q.length >= 1) {
+    where.OR = [
+      { paymentReference: { contains: q } },
+      { counterparty: { contains: q } },
+      { description: { contains: q } },
+    ];
+  }
+
+  const txs = await prisma.bankStatementTransaction.findMany({
+    where: Object.keys(where).length > 0 ? where : undefined,
+    orderBy: { valueDate: "desc" },
+    take: limit,
+    skip: offset,
+    select: { id: true, paymentReference: true, counterparty: true, amount: true, valueDate: true, description: true },
+  });
+
+  const internalTxIds = txs.map((t) => `BankStatementTransaction-${t.id}`);
+  const linkedRows =
+    internalTxIds.length > 0
+      ? await prisma.reconciliationResult.findMany({
+          where: { internalTxId: { in: internalTxIds }, matchStatus: "MATCHED" },
+          include: { stagingTx: { select: { amount: true } } },
+        })
+      : [];
+  const linkedByInternal = new Map<string, { total: number; count: number }>();
+  for (const r of linkedRows) {
+    if (r.internalTxId) {
+      const cur = linkedByInternal.get(r.internalTxId) ?? { total: 0, count: 0 };
+      cur.total += Number(r.stagingTx.amount);
+      cur.count += 1;
+      linkedByInternal.set(r.internalTxId, cur);
+    }
+  }
+
+  const total = await prisma.bankStatementTransaction.count({
+    where: Object.keys(where).length > 0 ? where : undefined,
+  });
+
+  const data = txs.map((t) => {
+    const internalTxId = `BankStatementTransaction-${t.id}`;
+    const linked = linkedByInternal.get(internalTxId) ?? { total: 0, count: 0 };
+    const internalAmount = Number(t.amount);
+    const remainingAmount = Math.max(0, internalAmount - linked.total);
+    return {
+      internalTxId,
+      reference: t.paymentReference ?? t.counterparty ?? "—",
+      name: t.counterparty ?? "—",
+      identityNo: null as string | null,
+      amount: internalAmount,
+      date: t.valueDate.toISOString().slice(0, 10),
+      description: t.description ?? null,
+      linkedInfo: { linkedCount: linked.count, linkedTotalAmount: linked.total, remainingAmount },
+    };
+  });
+
+  return sendOk(res, data, { total, limit, offset, internalSourceType: "BankStatement" });
+});
+
+// List GuestPayment for PSP Manual Match datatable (paginated, searchable) — legacy, prefer internal-for-match with fileId
+integrationRouter.get("/reconciliation/guest-payments", async (req: AuthedRequest, res) => {
+  const limit = Math.min(Number(req.query?.limit) || 50, 200);
+  const offset = Number(req.query?.offset) || 0;
+  const q = String(req.query?.search ?? "").trim();
+
+  const where: { status: string; OR?: object[] } = { status: "success" };
+  if (q.length >= 1) {
+    const digitsOnly = q.replace(/\D/g, "");
+    where.OR =
+      digitsOnly.length >= 1
+        ? [
+            { receiptNo: { contains: q } },
+            { guestName: { contains: q } },
+            { identityNo: { contains: digitsOnly } },
+          ]
+        : [{ receiptNo: { contains: q } }, { guestName: { contains: q } }];
+  }
+
+  // Fetch in batches, filter out fully-allocated (BAKI 0) records
+  const FETCH_BATCH = 200;
+  const allFiltered: Array<{
+    internalTxId: string;
+    reference: string;
+    name: string;
+    identityNo: string;
+    amount: number;
+    date: string;
+    linkedInfo: { linkedCount: number; linkedTotalAmount: number; remainingAmount: number };
+  }> = [];
+  let dbSkip = 0;
+
+  while (true) {
+    const payments = await prisma.guestPayment.findMany({
+      where,
+      orderBy: { paidAt: "desc" },
+      take: FETCH_BATCH,
+      skip: dbSkip,
+      select: { id: true, receiptNo: true, guestName: true, identityNo: true, amount: true, paidAt: true },
+    });
+    if (payments.length === 0) break;
+
+    const internalTxIds = payments.map((p) => `GuestPayment-${p.id}`);
+    const linkedRows = await prisma.reconciliationResult.findMany({
+      where: { internalTxId: { in: internalTxIds }, matchStatus: "MATCHED" },
+      include: { stagingTx: { select: { amount: true } } },
+    });
+    const linkedByInternal = new Map<string, { total: number; count: number }>();
+    for (const r of linkedRows) {
+      if (r.internalTxId) {
+        const cur = linkedByInternal.get(r.internalTxId) ?? { total: 0, count: 0 };
+        cur.total += Number(r.stagingTx.amount);
+        cur.count += 1;
+        linkedByInternal.set(r.internalTxId, cur);
+      }
+    }
+
+    for (const p of payments) {
+      const internalTxId = `GuestPayment-${p.id}`;
+      const linked = linkedByInternal.get(internalTxId) ?? { total: 0, count: 0 };
+      const internalAmount = Number(p.amount);
+      const remainingAmount = Math.max(0, internalAmount - linked.total);
+      if (remainingAmount === 0 && linked.count > 0) continue;
+      allFiltered.push({
+        internalTxId,
+        reference: p.receiptNo,
+        name: p.guestName,
+        identityNo: p.identityNo,
+        amount: internalAmount,
+        date: p.paidAt.toISOString().slice(0, 10),
+        linkedInfo: {
+          linkedCount: linked.count,
+          linkedTotalAmount: linked.total,
+          remainingAmount,
+        },
+      });
+    }
+    dbSkip += payments.length;
+    if (payments.length < FETCH_BATCH) break;
+  }
+
+  const results = allFiltered.slice(offset, offset + limit);
+  const total = allFiltered.length;
+
+  return sendOk(res, results, { total, limit, offset });
+});
+
+// Get internal transaction details for Siasat (variance investigation)
+integrationRouter.get("/reconciliation/internal-detail", async (req: AuthedRequest, res) => {
+  const internalTxId = String(req.query?.internalTxId ?? "").trim();
+  if (!internalTxId) {
+    return sendError(res, 400, "INVALID_INPUT", "internalTxId required");
+  }
+  if (internalTxId.startsWith("GuestPayment-")) {
+    const id = parseInt(internalTxId.replace("GuestPayment-", ""), 10);
+    if (!Number.isInteger(id) || id < 1) {
+      return sendError(res, 400, "INVALID_INPUT", "Invalid GuestPayment ID");
+    }
+    const gp = await prisma.guestPayment.findUnique({
+      where: { id },
+      select: { id: true, receiptNo: true, guestName: true, identityNo: true, amount: true, paidAt: true },
+    });
+    if (!gp) return sendError(res, 404, "NOT_FOUND", "GuestPayment not found");
+    return sendOk(res, {
+      type: "GuestPayment",
+      internalTxId: `GuestPayment-${gp.id}`,
+      reference: gp.receiptNo,
+      name: gp.guestName,
+      identityNo: gp.identityNo,
+      amount: Number(gp.amount),
+      date: gp.paidAt.toISOString().slice(0, 10),
+    });
+  }
+  if (internalTxId.startsWith("BankStatementTransaction-")) {
+    const id = parseInt(internalTxId.replace("BankStatementTransaction-", ""), 10);
+    if (!Number.isInteger(id) || id < 1) {
+      return sendError(res, 400, "INVALID_INPUT", "Invalid BankStatementTransaction ID");
+    }
+    const bst = await prisma.bankStatementTransaction.findUnique({
+      where: { id },
+      select: { id: true, paymentReference: true, counterparty: true, amount: true, valueDate: true },
+    });
+    if (!bst) return sendError(res, 404, "NOT_FOUND", "BankStatementTransaction not found");
+    return sendOk(res, {
+      type: "BankStatementTransaction",
+      internalTxId: `BankStatementTransaction-${bst.id}`,
+      reference: bst.paymentReference ?? bst.counterparty ?? "—",
+      name: bst.counterparty ?? "—",
+      identityNo: null,
+      amount: Number(bst.amount),
+      date: bst.valueDate.toISOString().slice(0, 10),
+    });
+  }
+  return sendError(res, 400, "INVALID_INPUT", "Invalid internalTxId format");
+});
+
+// Get staging tx details for Siasat (duplicate investigation - shows matched row)
+integrationRouter.get("/reconciliation/staging-detail", async (req: AuthedRequest, res) => {
+  const stagingTxId = Number(req.query?.stagingTxId);
+  if (!Number.isInteger(stagingTxId) || stagingTxId < 1) {
+    return sendError(res, 400, "INVALID_INPUT", "stagingTxId required");
+  }
+  const st = await prisma.integrationStagingTx.findUnique({
+    where: { id: stagingTxId },
+    include: { file: { select: { fileName: true } } },
+  });
+  if (!st) return sendError(res, 404, "NOT_FOUND", "Staging transaction not found");
+  return sendOk(res, {
+    type: "IntegrationStagingTx",
+    internalTxId: `StagingTx-${st.id}`,
+    reference: st.sourceTxRef ?? "—",
+    name: st.payerName ?? "—",
+    identityNo: st.payerIc ?? null,
+    amount: Number(st.amount),
+    date: st.txDate.toISOString().slice(0, 10),
+    fileName: st.file?.fileName ?? null,
+  });
+});
+
+const AMOUNT_TOLERANCE = 0.01; // 1% for many-to-one validation
 
 integrationRouter.post("/reconciliation/apply-match", async (req: AuthedRequest, res) => {
   const reconResultId = Number(req.body?.reconResultId);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, unref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useDraggableModal } from "@/composables/useDraggableModal";
 import {
   getReconciliationRun,
   getReconciliationResults,
@@ -28,10 +29,18 @@ import {
   applyReconciliationMatchManyToMany,
   applyReconciliationMatchManyToManyBatch,
   searchInternalForMatch,
+  listInternalForMatch,
+  listGuestPaymentsForMatch,
+  listBankStatementForMatch,
+  getInternalTxDetail,
+  getStagingTxDetail,
   type ReconciliationRun,
   type ReconciliationResultRow,
   type AISuggestedMatch,
   type SearchInternalResult,
+  type GuestPaymentForMatch,
+  type InternalSourceType,
+  type InternalTxDetail,
   type ManyToManyLink,
 } from "@/api/integration";
 
@@ -44,10 +53,23 @@ const results = ref<ReconciliationResultRow[]>([]);
 const loading = ref(true);
 const error = ref("");
 const runningRecon = ref(false);
-const activeTab = ref<"matched" | "unmatched" | "variance" | "actions">("matched");
+const activeTab = ref<"matched" | "unmatched" | "variance" | "duplicate" | "actions">("matched");
 
 const matchedResults = computed(() => results.value.filter((r) => r.matchStatus === "MATCHED"));
 const unmatchedResults = computed(() => results.value.filter((r) => r.matchStatus === "UNMATCHED"));
+const unmatchedSearchQuery = ref("");
+const filteredUnmatchedResults = computed(() => {
+  const q = unmatchedSearchQuery.value.trim().toLowerCase();
+  if (!q) return unmatchedResults.value;
+  return unmatchedResults.value.filter((r) => {
+    const ic = (r.stagingTx?.payerIc ?? "").toLowerCase();
+    const name = (r.stagingTx?.payerName ?? "").toLowerCase();
+    const ref = (r.stagingTx?.sourceTxRef ?? "").toLowerCase();
+    const amount = String(r.stagingTx?.amount ?? "").toLowerCase();
+    const date = (r.stagingTx?.txDate ?? "").toLowerCase();
+    return ic.includes(q) || name.includes(q) || ref.includes(q) || amount.includes(q) || date.includes(q);
+  });
+});
 const varianceResults = computed(() => results.value.filter((r) => r.matchStatus === "MISMATCH"));
 const duplicateResults = computed(() => results.value.filter((r) => r.matchStatus === "DUPLICATE"));
 const allActions = computed(() =>
@@ -58,20 +80,38 @@ const allActions = computed(() =>
 
 const manualMatchModal = ref<{ open: boolean; row: ReconciliationResultRow | null }>({ open: false, row: null });
 const forceMatchModal = ref<{ open: boolean; row: ReconciliationResultRow | null }>({ open: false, row: null });
+const siasatModal = ref<{ open: boolean; row: ReconciliationResultRow | null }>({ open: false, row: null });
+const siasatInternalDetail = ref<InternalTxDetail | null>(null);
+const siasatLoading = ref(false);
+
+const dragManualMatch = useDraggableModal();
+const dragOneToMany = useDraggableModal();
+const dragBatchManyToOne = useDraggableModal();
+const dragBatchOneToMany = useDraggableModal();
+const dragManyToMany = useDraggableModal();
+const dragForceMatch = useDraggableModal();
+const dragSiasat = useDraggableModal();
 
 const manualMatchSearchQuery = ref("");
-const manualMatchSearchResults = ref<SearchInternalResult[]>([]);
-const manualMatchSearchLoading = ref(false);
-const manualMatchSelected = ref<SearchInternalResult | null>(null);
+const manualMatchTableData = ref<GuestPaymentForMatch[]>([]);
+const manualMatchTableLoading = ref(false);
+const manualMatchTableTotal = ref(0);
+const manualMatchPage = ref(0);
+const manualMatchPageSize = 50;
+const manualMatchSelectedIds = ref<Set<string>>(new Set());
 const manualMatchApplyLoading = ref(false);
 
 const selectedUnmatchedIds = ref<Set<number>>(new Set());
 const batchManyToOneModal = ref(false);
-const batchSearchQuery = ref("");
-const batchSearchResults = ref<SearchInternalResult[]>([]);
-const batchSearchLoading = ref(false);
-const batchSelected = ref<SearchInternalResult | null>(null);
+const batchTableQuery = ref("");
+const batchTableData = ref<GuestPaymentForMatch[]>([]);
+const batchTableLoading = ref(false);
+const batchTableTotal = ref(0);
+const batchPage = ref(0);
+const batchPageSize = 50;
+const batchSelected = ref<GuestPaymentForMatch | null>(null);
 const batchManyToOneApplyLoading = ref(false);
+const internalSourceType = ref<InternalSourceType>("GuestPayment");
 
 const oneToManyModal = ref<{ open: boolean; row: ReconciliationResultRow | null }>({ open: false, row: null });
 const oneToManySearchQuery = ref("");
@@ -84,42 +124,97 @@ function openBatchOneToManyModal() {
   if (selectedUnmatchedCount.value === 0) return;
   batchOneToManyModal.value = true;
   batchOneToManyActiveIndex.value = 0;
-  batchOneToManySearchQuery.value = "";
-  batchOneToManySearchResults.value = [];
+  batchOneToManyTableQuery.value = "";
+  batchOneToManyPage.value = 0;
+  batchOneToManySelectedIds.value = new Set();
   batchOneToManyItems.value = unmatchedResults.value
     .filter((r) => selectedUnmatchedIds.value.has(r.id))
     .map((row) => ({ row, selected: [] as SearchInternalResult[] }));
+  fetchBatchOneToManyTable();
 }
 
 function closeBatchOneToManyModal() {
   batchOneToManyModal.value = false;
   batchOneToManyItems.value = [];
   selectedUnmatchedIds.value = new Set();
+  dragBatchOneToMany.resetPosition();
 }
 
 const batchOneToManyActiveIndex = ref(0);
-const batchOneToManySearchQuery = ref("");
-const batchOneToManySearchResults = ref<SearchInternalResult[]>([]);
-const batchOneToManySearchLoading = ref(false);
+const batchOneToManyTableQuery = ref("");
+const batchOneToManyTableData = ref<GuestPaymentForMatch[]>([]);
+const batchOneToManyTableLoading = ref(false);
+const batchOneToManyTableTotal = ref(0);
+const batchOneToManyPage = ref(0);
+const batchOneToManyPageSize = 50;
+const batchOneToManySelectedIds = ref<Set<string>>(new Set());
 
-async function handleBatchOneToManySearch() {
-  if (!fileId.value) return;
-  const q = batchOneToManySearchQuery.value.trim();
-  if (q.length < 2) {
-    batchOneToManySearchResults.value = [];
-    return;
-  }
-  batchOneToManySearchLoading.value = true;
-  batchOneToManySearchResults.value = [];
+async function fetchBatchOneToManyTable() {
+  if (!fileId.value || !Number.isInteger(fileId.value)) return;
+  batchOneToManyTableLoading.value = true;
   try {
-    const res = await searchInternalForMatch(fileId.value, q);
-    batchOneToManySearchResults.value = res.data ?? [];
+    const src = (run.value?.source ?? "").toUpperCase();
+    const refHint = results.value[0]?.stagingTx?.sourceTxRef ?? "";
+    const isPspSource = ["BILPIZ", "AMIL_BILPIZ02"].includes(src) || (!src && /^BILPIZ-/i.test(refHint));
+    const isBankSource = ["JAN", "BANK_ISLAM", "MAYBANK"].includes(src) || (!src && /^JAN-/i.test(refHint));
+    const params = { limit: batchOneToManyPageSize, offset: batchOneToManyPage.value * batchOneToManyPageSize, search: batchOneToManyTableQuery.value.trim() || undefined };
+    let res: Awaited<ReturnType<typeof listInternalForMatch>>;
+    if (isBankSource) {
+      res = await listBankStatementForMatch(params);
+      internalSourceType.value = "BankStatement";
+    } else if (isPspSource) {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listGuestPaymentsForMatch(params);
+      internalSourceType.value = "GuestPayment";
+    } else {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listBankStatementForMatch(params);
+      internalSourceType.value = (res.meta?.internalSourceType as InternalSourceType) ?? "GuestPayment";
+    }
+    batchOneToManyTableData.value = res.data ?? [];
+    batchOneToManyTableTotal.value = res.meta?.total ?? 0;
   } catch {
-    batchOneToManySearchResults.value = [];
+    batchOneToManyTableData.value = [];
+    batchOneToManyTableTotal.value = 0;
   } finally {
-    batchOneToManySearchLoading.value = false;
+    batchOneToManyTableLoading.value = false;
   }
 }
+
+function toggleBatchOneToManySelect(internalTxId: string) {
+  const next = new Set(batchOneToManySelectedIds.value);
+  if (next.has(internalTxId)) next.delete(internalTxId);
+  else next.add(internalTxId);
+  batchOneToManySelectedIds.value = next;
+}
+
+function toggleBatchOneToManySelectAll() {
+  const ids = batchOneToManyTableData.value.map((r) => r.internalTxId);
+  const allSelected = ids.every((id) => batchOneToManySelectedIds.value.has(id));
+  if (allSelected) {
+    const next = new Set(batchOneToManySelectedIds.value);
+    ids.forEach((id) => next.delete(id));
+    batchOneToManySelectedIds.value = next;
+  } else {
+    const next = new Set(batchOneToManySelectedIds.value);
+    ids.forEach((id) => next.add(id));
+    batchOneToManySelectedIds.value = next;
+  }
+}
+
+function addSelectedToBatchOneToManyRow() {
+  const idx = batchOneToManyActiveIndex.value;
+  const ids = batchOneToManySelectedIds.value;
+  const items = [...batchOneToManyItems.value];
+  const sel = items[idx]?.selected ?? [];
+  const toAdd = batchOneToManyTableData.value.filter((r) => ids.has(r.internalTxId) && !sel.some((s) => s.internalTxId === r.internalTxId));
+  if (toAdd.length === 0) return;
+  items[idx] = { ...items[idx], selected: [...sel, ...toAdd] };
+  batchOneToManyItems.value = items;
+  batchOneToManySelectedIds.value = new Set();
+}
+
+const batchOneToManyTotalPages = computed(() => Math.max(1, Math.ceil(batchOneToManyTableTotal.value / batchOneToManyPageSize)));
 
 const batchOneToManyModal = ref(false);
 const batchOneToManyItems = ref<Array<{ row: ReconciliationResultRow; selected: SearchInternalResult[] }>>([]);
@@ -150,7 +245,7 @@ const batchOneToManyAllValid = computed(() =>
   batchOneToManyItems.value.every((item, i) => {
     const total = getBatchOneToManyItemTotal(i);
     const stagingAmount = Number(item.row.stagingTx.amount);
-    const tol = 0.02;
+    const tol = 0.01;
     return item.selected.length >= 2 && total >= stagingAmount * (1 - tol) && total <= stagingAmount * (1 + tol);
   }),
 );
@@ -180,9 +275,13 @@ async function handleBatchOneToManyApply() {
 
 // Phase 3: Many-to-many (N:M)
 const manyToManyModal = ref(false);
-const manyToManySearchQuery = ref("");
-const manyToManySearchResults = ref<SearchInternalResult[]>([]);
-const manyToManySearchLoading = ref(false);
+const manyToManyTableQuery = ref("");
+const manyToManyTableData = ref<GuestPaymentForMatch[]>([]);
+const manyToManyTableLoading = ref(false);
+const manyToManyTableTotal = ref(0);
+const manyToManyPage = ref(0);
+const manyToManyPageSize = 50;
+const manyToManySelectedIds = ref<Set<string>>(new Set());
 const manyToManyApplyLoading = ref(false);
 const manyToManyBatchApplyLoading = ref(false);
 const activeManyToManyGroupIndex = ref(0);
@@ -198,8 +297,10 @@ const manyToManyGroups = ref<
 function openManyToManyModal() {
   if (selectedUnmatchedCount.value === 0) return;
   manyToManyModal.value = true;
-  manyToManySearchQuery.value = "";
-  manyToManySearchResults.value = [];
+  manyToManyTableQuery.value = "";
+  manyToManyPage.value = 0;
+  manyToManySelectedIds.value = new Set();
+  fetchManyToManyTable();
   activeManyToManyGroupIndex.value = 0;
   manyToManyGroups.value = [
     {
@@ -214,26 +315,76 @@ function closeManyToManyModal() {
   manyToManyModal.value = false;
   manyToManyGroups.value = [];
   selectedUnmatchedIds.value = new Set();
+  dragManyToMany.resetPosition();
 }
 
-async function handleManyToManySearch() {
-  if (!fileId.value) return;
-  const q = manyToManySearchQuery.value.trim();
-  if (q.length < 2) {
-    manyToManySearchResults.value = [];
-    return;
-  }
-  manyToManySearchLoading.value = true;
-  manyToManySearchResults.value = [];
+async function fetchManyToManyTable() {
+  if (!fileId.value || !Number.isInteger(fileId.value)) return;
+  manyToManyTableLoading.value = true;
   try {
-    const res = await searchInternalForMatch(fileId.value, q);
-    manyToManySearchResults.value = res.data ?? [];
+    const src = (run.value?.source ?? "").toUpperCase();
+    const refHint = results.value[0]?.stagingTx?.sourceTxRef ?? "";
+    const isPspSource = ["BILPIZ", "AMIL_BILPIZ02"].includes(src) || (!src && /^BILPIZ-/i.test(refHint));
+    const isBankSource = ["JAN", "BANK_ISLAM", "MAYBANK"].includes(src) || (!src && /^JAN-/i.test(refHint));
+    const params = { limit: manyToManyPageSize, offset: manyToManyPage.value * manyToManyPageSize, search: manyToManyTableQuery.value.trim() || undefined };
+    let res: Awaited<ReturnType<typeof listInternalForMatch>>;
+    if (isBankSource) {
+      res = await listBankStatementForMatch(params);
+      internalSourceType.value = "BankStatement";
+    } else if (isPspSource) {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listGuestPaymentsForMatch(params);
+      internalSourceType.value = "GuestPayment";
+    } else {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listBankStatementForMatch(params);
+      internalSourceType.value = (res.meta?.internalSourceType as InternalSourceType) ?? "GuestPayment";
+    }
+    manyToManyTableData.value = res.data ?? [];
+    manyToManyTableTotal.value = res.meta?.total ?? 0;
   } catch {
-    manyToManySearchResults.value = [];
+    manyToManyTableData.value = [];
+    manyToManyTableTotal.value = 0;
   } finally {
-    manyToManySearchLoading.value = false;
+    manyToManyTableLoading.value = false;
   }
 }
+
+function toggleManyToManySelect(internalTxId: string) {
+  const next = new Set(manyToManySelectedIds.value);
+  if (next.has(internalTxId)) next.delete(internalTxId);
+  else next.add(internalTxId);
+  manyToManySelectedIds.value = next;
+}
+
+function toggleManyToManySelectAll() {
+  const ids = manyToManyTableData.value.map((r) => r.internalTxId);
+  const allSelected = ids.every((id) => manyToManySelectedIds.value.has(id));
+  if (allSelected) {
+    const next = new Set(manyToManySelectedIds.value);
+    ids.forEach((id) => next.delete(id));
+    manyToManySelectedIds.value = next;
+  } else {
+    const next = new Set(manyToManySelectedIds.value);
+    ids.forEach((id) => next.add(id));
+    manyToManySelectedIds.value = next;
+  }
+}
+
+function addSelectedToManyToManyGroup() {
+  const gi = activeManyToManyGroupIndex.value;
+  const g = manyToManyGroups.value[gi];
+  if (!g) return;
+  const ids = manyToManySelectedIds.value;
+  const toAdd = manyToManyTableData.value.filter((r) => ids.has(r.internalTxId) && !g.internalSelected.some((s) => s.internalTxId === r.internalTxId));
+  if (toAdd.length === 0) return;
+  const groups = [...manyToManyGroups.value];
+  groups[gi] = { ...g, internalSelected: [...g.internalSelected, ...toAdd] };
+  manyToManyGroups.value = groups;
+  manyToManySelectedIds.value = new Set();
+}
+
+const manyToManyTotalPages = computed(() => Math.max(1, Math.ceil(manyToManyTableTotal.value / manyToManyPageSize)));
 
 function addManyToManyInternal(r: SearchInternalResult, groupIndex?: number) {
   const idx = groupIndex ?? activeManyToManyGroupIndex.value;
@@ -308,7 +459,7 @@ const manyToManyGroupValid = (groupIndex: number) => {
   const g = manyToManyGroups.value[groupIndex];
   const allocations = g?.allocations ?? {};
   if (staging.length < 2 && internal.length < 2) return false;
-  const tol = 0.02;
+  const tol = 0.01;
   for (const row of staging) {
     const sum = internal.reduce((s, i) => s + (allocations[`${row.id}-${i.internalTxId}`] ?? 0), 0);
     const amt = Number(row.stagingTx.amount);
@@ -475,8 +626,48 @@ function statusBadgeClass(status: string) {
   return map[status] ?? "bg-slate-100 text-slate-600";
 }
 
+async function fetchManualMatchTable() {
+  if (!manualMatchModal.value.row || !fileId.value || !Number.isInteger(fileId.value)) return;
+  manualMatchTableLoading.value = true;
+  try {
+    const src = (run.value?.source ?? "").toUpperCase();
+    const refHint = results.value[0]?.stagingTx?.sourceTxRef ?? "";
+    const isPspSource = ["BILPIZ", "AMIL_BILPIZ02"].includes(src) || (!src && /^BILPIZ-/i.test(refHint));
+    const isBankSource = ["JAN", "BANK_ISLAM", "MAYBANK"].includes(src) || (!src && /^JAN-/i.test(refHint));
+    const params = {
+      limit: manualMatchPageSize,
+      offset: manualMatchPage.value * manualMatchPageSize,
+      search: manualMatchSearchQuery.value.trim() || undefined,
+    };
+    let res: Awaited<ReturnType<typeof listInternalForMatch>>;
+    if (isBankSource) {
+      res = await listBankStatementForMatch(params);
+      internalSourceType.value = "BankStatement";
+    } else if (isPspSource) {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listGuestPaymentsForMatch(params);
+      internalSourceType.value = "GuestPayment";
+    } else {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listBankStatementForMatch(params);
+      internalSourceType.value = (res.meta?.internalSourceType as InternalSourceType) ?? "GuestPayment";
+    }
+    manualMatchTableData.value = res.data ?? [];
+    manualMatchTableTotal.value = res.meta?.total ?? 0;
+  } catch {
+    manualMatchTableData.value = [];
+    manualMatchTableTotal.value = 0;
+  } finally {
+    manualMatchTableLoading.value = false;
+  }
+}
+
 function openManualMatch(row: ReconciliationResultRow) {
   manualMatchModal.value = { open: true, row };
+  manualMatchSearchQuery.value = "";
+  manualMatchPage.value = 0;
+  manualMatchSelectedIds.value = new Set();
+  fetchManualMatchTable();
 }
 
 function openForceMatch(row: ReconciliationResultRow) {
@@ -486,29 +677,44 @@ function openForceMatch(row: ReconciliationResultRow) {
 function closeManualMatch() {
   manualMatchModal.value = { open: false, row: null };
   manualMatchSearchQuery.value = "";
-  manualMatchSearchResults.value = [];
-  manualMatchSelected.value = null;
+  manualMatchTableData.value = [];
+  manualMatchSelectedIds.value = new Set();
+  dragManualMatch.resetPosition();
 }
 
 async function handleManualMatchSearch() {
-  if (!fileId.value || !manualMatchModal.value.row) return;
-  const q = manualMatchSearchQuery.value.trim();
-  if (q.length < 2) {
-    manualMatchSearchResults.value = [];
-    return;
-  }
-  manualMatchSearchLoading.value = true;
-  manualMatchSearchResults.value = [];
-  manualMatchSelected.value = null;
-  try {
-    const res = await searchInternalForMatch(fileId.value, q);
-    manualMatchSearchResults.value = res.data ?? [];
-  } catch {
-    manualMatchSearchResults.value = [];
-  } finally {
-    manualMatchSearchLoading.value = false;
+  manualMatchPage.value = 0;
+  await fetchManualMatchTable();
+}
+
+function toggleManualMatchSelect(internalTxId: string) {
+  const next = new Set(manualMatchSelectedIds.value);
+  if (next.has(internalTxId)) next.delete(internalTxId);
+  else next.add(internalTxId);
+  manualMatchSelectedIds.value = next;
+}
+
+function toggleManualMatchSelectAll() {
+  const ids = manualMatchTableData.value.map((r) => r.internalTxId);
+  const allSelected = ids.every((id) => manualMatchSelectedIds.value.has(id));
+  if (allSelected) {
+    const next = new Set(manualMatchSelectedIds.value);
+    ids.forEach((id) => next.delete(id));
+    manualMatchSelectedIds.value = next;
+  } else {
+    const next = new Set(manualMatchSelectedIds.value);
+    ids.forEach((id) => next.add(id));
+    manualMatchSelectedIds.value = next;
   }
 }
+
+const manualMatchSelected = computed(() => {
+  return manualMatchTableData.value.filter((r) => manualMatchSelectedIds.value.has(r.internalTxId));
+});
+
+const manualMatchTotalPages = computed(() =>
+  Math.max(1, Math.ceil(manualMatchTableTotal.value / manualMatchPageSize)),
+);
 
 function toggleUnmatchedSelect(id: number) {
   const next = new Set(selectedUnmatchedIds.value);
@@ -518,10 +724,17 @@ function toggleUnmatchedSelect(id: number) {
 }
 
 function toggleSelectAllUnmatched() {
-  if (selectedUnmatchedCount.value === unmatchedResults.value.length) {
-    selectedUnmatchedIds.value = new Set();
+  const filtered = filteredUnmatchedResults.value;
+  const filteredIds = new Set(filtered.map((r) => r.id));
+  const selectedInFiltered = filtered.filter((r) => selectedUnmatchedIds.value.has(r.id)).length;
+  if (selectedInFiltered === filtered.length) {
+    const next = new Set(selectedUnmatchedIds.value);
+    filteredIds.forEach((id) => next.delete(id));
+    selectedUnmatchedIds.value = next;
   } else {
-    selectedUnmatchedIds.value = new Set(unmatchedResults.value.map((r) => r.id));
+    const next = new Set(selectedUnmatchedIds.value);
+    filteredIds.forEach((id) => next.add(id));
+    selectedUnmatchedIds.value = next;
   }
 }
 
@@ -537,6 +750,7 @@ function closeOneToManyModal() {
   oneToManySearchQuery.value = "";
   oneToManySearchResults.value = [];
   oneToManySelectedIds.value = new Set();
+  dragOneToMany.resetPosition();
 }
 
 async function handleOneToManySearch() {
@@ -572,7 +786,7 @@ async function handleOneToManyApply() {
   const ids = Array.from(oneToManySelectedIds.value);
   const stagingAmount = Number(row.stagingTx.amount);
   const selectedTotal = oneToManySelectedTotal.value;
-  const tolerance = 0.02;
+  const tolerance = 0.01;
   if (selectedTotal < stagingAmount * (1 - tolerance) || selectedTotal > stagingAmount * (1 + tolerance)) {
     alert(`Jumlah dalaman RM ${selectedTotal.toFixed(2)} tidak sepadan dengan staging RM ${stagingAmount.toFixed(2)}.`);
     return;
@@ -589,41 +803,57 @@ async function handleOneToManyApply() {
   }
 }
 
+async function fetchBatchTable() {
+  if (!fileId.value || !Number.isInteger(fileId.value)) return;
+  batchTableLoading.value = true;
+  try {
+    const src = (run.value?.source ?? "").toUpperCase();
+    const refHint = results.value[0]?.stagingTx?.sourceTxRef ?? "";
+    const isPspSource = ["BILPIZ", "AMIL_BILPIZ02"].includes(src) || (!src && /^BILPIZ-/i.test(refHint));
+    const isBankSource = ["JAN", "BANK_ISLAM", "MAYBANK"].includes(src) || (!src && /^JAN-/i.test(refHint));
+    const params = { limit: batchPageSize, offset: batchPage.value * batchPageSize, search: batchTableQuery.value.trim() || undefined };
+    let res: Awaited<ReturnType<typeof listInternalForMatch>>;
+    if (isBankSource) {
+      res = await listBankStatementForMatch(params);
+      internalSourceType.value = "BankStatement";
+    } else if (isPspSource) {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listGuestPaymentsForMatch(params);
+      internalSourceType.value = "GuestPayment";
+    } else {
+      res = await listInternalForMatch(fileId.value, params);
+      if (!res.data || res.data.length === 0) res = await listBankStatementForMatch(params);
+      internalSourceType.value = (res.meta?.internalSourceType as InternalSourceType) ?? "GuestPayment";
+    }
+    batchTableData.value = res.data ?? [];
+    batchTableTotal.value = res.meta?.total ?? 0;
+  } catch {
+    batchTableData.value = [];
+    batchTableTotal.value = 0;
+  } finally {
+    batchTableLoading.value = false;
+  }
+}
+
 function openBatchManyToOneModal() {
   if (selectedUnmatchedCount.value === 0) return;
   batchManyToOneModal.value = true;
-  batchSearchQuery.value = "";
-  batchSearchResults.value = [];
+  batchTableQuery.value = "";
+  batchPage.value = 0;
   batchSelected.value = null;
+  fetchBatchTable();
 }
 
 function closeBatchManyToOneModal() {
   batchManyToOneModal.value = false;
-  batchSearchQuery.value = "";
-  batchSearchResults.value = [];
+  batchTableQuery.value = "";
+  batchTableData.value = [];
   batchSelected.value = null;
   selectedUnmatchedIds.value = new Set();
+  dragBatchManyToOne.resetPosition();
 }
 
-async function handleBatchSearch() {
-  if (!fileId.value) return;
-  const q = batchSearchQuery.value.trim();
-  if (q.length < 2) {
-    batchSearchResults.value = [];
-    return;
-  }
-  batchSearchLoading.value = true;
-  batchSearchResults.value = [];
-  batchSelected.value = null;
-  try {
-    const res = await searchInternalForMatch(fileId.value, q);
-    batchSearchResults.value = res.data ?? [];
-  } catch {
-    batchSearchResults.value = [];
-  } finally {
-    batchSearchLoading.value = false;
-  }
-}
+const batchTotalPages = computed(() => Math.max(1, Math.ceil(batchTableTotal.value / batchPageSize)));
 
 async function handleBatchManyToOneApply() {
   const ids = Array.from(selectedUnmatchedIds.value);
@@ -650,17 +880,31 @@ async function handleBatchManyToOneApply() {
 async function handleManualMatchApply() {
   const row = manualMatchModal.value.row;
   const selected = manualMatchSelected.value;
-  if (!row || !selected) return;
-  const currentAmount = Number(row.stagingTx.amount);
-  if (currentAmount > selected.linkedInfo.remainingAmount) {
-    alert(
-      `Amaun staging RM ${currentAmount.toFixed(2)} melebihi baki dalaman RM ${selected.linkedInfo.remainingAmount.toFixed(2)}.`,
-    );
-    return;
-  }
+  if (!row || selected.length === 0) return;
+  const stagingAmount = Number(row.stagingTx.amount);
   manualMatchApplyLoading.value = true;
   try {
-    await applyReconciliationMatch(row.id, selected.internalTxId);
+    if (selected.length === 1) {
+      const s = selected[0];
+      if (stagingAmount > s.linkedInfo.remainingAmount) {
+        alert(
+          `Amaun staging RM ${stagingAmount.toFixed(2)} melebihi baki dalaman RM ${s.linkedInfo.remainingAmount.toFixed(2)}.`,
+        );
+        return;
+      }
+      await applyReconciliationMatch(row.id, s.internalTxId);
+    } else {
+      const internalTxIds = selected.map((s) => s.internalTxId);
+      const totalSelected = selected.reduce((sum, s) => sum + s.amount, 0);
+      const tolerance = 0.01;
+      if (Math.abs(totalSelected - stagingAmount) / stagingAmount > tolerance) {
+        alert(
+          `Jumlah rekod terpilih RM ${totalSelected.toFixed(2)} tidak sepadan dengan staging RM ${stagingAmount.toFixed(2)} (toleransi 1%).`,
+        );
+        return;
+      }
+      await applyReconciliationMatchOneToMany(row.id, internalTxIds);
+    }
     closeManualMatch();
     await load();
   } catch (e) {
@@ -672,6 +916,32 @@ async function handleManualMatchApply() {
 
 function closeForceMatch() {
   forceMatchModal.value = { open: false, row: null };
+  dragForceMatch.resetPosition();
+}
+
+async function openSiasat(row: ReconciliationResultRow) {
+  siasatModal.value = { open: true, row };
+  siasatInternalDetail.value = null;
+  siasatLoading.value = true;
+  try {
+    if (row.matchRule === "STAGING_DUPLICATE" && row.stagingTx?.duplicates?.[0]?.matchedStagingTxId) {
+      const res = await getStagingTxDetail(row.stagingTx.duplicates[0].matchedStagingTxId!);
+      siasatInternalDetail.value = res.data ?? null;
+    } else if (row.internalTxId) {
+      const res = await getInternalTxDetail(row.internalTxId);
+      siasatInternalDetail.value = res.data ?? null;
+    }
+  } catch {
+    siasatInternalDetail.value = null;
+  } finally {
+    siasatLoading.value = false;
+  }
+}
+
+function closeSiasat() {
+  siasatModal.value = { open: false, row: null };
+  siasatInternalDetail.value = null;
+  dragSiasat.resetPosition();
 }
 
 async function handleAIAssist() {
@@ -768,6 +1038,50 @@ function goBack() {
 
 onMounted(load);
 watch(fileId, load);
+
+let manualMatchSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+watch(manualMatchSearchQuery, () => {
+  if (!manualMatchModal.value.open) return;
+  if (manualMatchSearchTimeout) clearTimeout(manualMatchSearchTimeout);
+  manualMatchSearchTimeout = setTimeout(() => {
+    manualMatchPage.value = 0;
+    fetchManualMatchTable();
+    manualMatchSearchTimeout = null;
+  }, 300);
+});
+
+let batchTableSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+watch(batchTableQuery, () => {
+  if (!batchManyToOneModal.value) return;
+  if (batchTableSearchTimeout) clearTimeout(batchTableSearchTimeout);
+  batchTableSearchTimeout = setTimeout(() => {
+    batchPage.value = 0;
+    fetchBatchTable();
+    batchTableSearchTimeout = null;
+  }, 300);
+});
+
+let batchOneToManyTableSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+watch(batchOneToManyTableQuery, () => {
+  if (!batchOneToManyModal.value) return;
+  if (batchOneToManyTableSearchTimeout) clearTimeout(batchOneToManyTableSearchTimeout);
+  batchOneToManyTableSearchTimeout = setTimeout(() => {
+    batchOneToManyPage.value = 0;
+    fetchBatchOneToManyTable();
+    batchOneToManyTableSearchTimeout = null;
+  }, 300);
+});
+
+let manyToManyTableSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+watch(manyToManyTableQuery, () => {
+  if (!manyToManyModal.value) return;
+  if (manyToManyTableSearchTimeout) clearTimeout(manyToManyTableSearchTimeout);
+  manyToManyTableSearchTimeout = setTimeout(() => {
+    manyToManyPage.value = 0;
+    fetchManyToManyTable();
+    manyToManyTableSearchTimeout = null;
+  }, 300);
+});
 </script>
 
 <template>
@@ -888,6 +1202,18 @@ watch(fileId, load);
               type="button"
               :class="[
                 'border-b-2 px-3 py-2 text-sm font-medium',
+                activeTab === 'duplicate'
+                  ? 'border-violet-600 text-violet-600'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
+              ]"
+              @click="activeTab = 'duplicate'"
+            >
+              Duplicate ({{ duplicateResults.length }})
+            </button>
+            <button
+              type="button"
+              :class="[
+                'border-b-2 px-3 py-2 text-sm font-medium',
                 activeTab === 'actions'
                   ? 'border-violet-600 text-violet-600'
                   : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
@@ -1000,12 +1326,21 @@ watch(fileId, load);
             v-if="activeTab === 'unmatched' && unmatchedResults.length > 0"
             class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-2"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="relative">
+                <Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  v-model="unmatchedSearchQuery"
+                  type="text"
+                  placeholder="Carian (IC, nama, rujukan, amaun, tarikh)..."
+                  class="w-64 rounded-lg border border-slate-300 py-1.5 pl-8 pr-3 text-sm shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                />
+              </div>
               <label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-600">
                 <input
                   type="checkbox"
-                  :checked="selectedUnmatchedCount === unmatchedResults.length && unmatchedResults.length > 0"
-                  :indeterminate="selectedUnmatchedCount > 0 && selectedUnmatchedCount < unmatchedResults.length"
+                  :checked="filteredUnmatchedResults.length > 0 && filteredUnmatchedResults.every((r) => selectedUnmatchedIds.has(r.id))"
+                  :indeterminate="filteredUnmatchedResults.some((r) => selectedUnmatchedIds.has(r.id)) && !filteredUnmatchedResults.every((r) => selectedUnmatchedIds.has(r.id))"
                   class="h-4 w-4 rounded border-slate-300 accent-violet-600"
                   @change="toggleSelectAllUnmatched"
                 />
@@ -1013,6 +1348,9 @@ watch(fileId, load);
               </label>
               <span v-if="selectedUnmatchedCount > 0" class="text-xs text-slate-600">
                 {{ selectedUnmatchedCount }} dipilih · Jumlah RM {{ selectedUnmatchedTotal.toFixed(2) }}
+              </span>
+              <span v-if="unmatchedSearchQuery.trim()" class="text-xs text-slate-500">
+                {{ filteredUnmatchedResults.length }} / {{ unmatchedResults.length }} rekod
               </span>
             </div>
             <div class="flex gap-2">
@@ -1092,7 +1430,7 @@ watch(fileId, load);
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <tr v-for="row in unmatchedResults" :key="row.id">
+                <tr v-for="row in filteredUnmatchedResults" :key="row.id">
                   <td class="w-12 min-w-[3rem] px-3 py-2 align-middle">
                     <input
                       type="checkbox"
@@ -1113,14 +1451,7 @@ watch(fileId, load);
                         class="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
                         @click="openManualMatch(row)"
                       >
-                        <Link2 class="h-3.5 w-3.5" /> 1:1
-                      </button>
-                      <button
-                        type="button"
-                        class="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-violet-600 hover:bg-violet-50"
-                        @click="openOneToManyModal(row)"
-                      >
-                        <Link2 class="h-3.5 w-3.5" /> 1:N
+                        <Link2 class="h-3.5 w-3.5" /> 1:1/1:N
                       </button>
                       <button
                         type="button"
@@ -1132,8 +1463,10 @@ watch(fileId, load);
                     </div>
                   </td>
                 </tr>
-                <tr v-if="unmatchedResults.length === 0">
-                  <td colspan="7" class="px-4 py-8 text-center text-slate-500">Tiada rekod unmatched.</td>
+                <tr v-if="filteredUnmatchedResults.length === 0">
+                  <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                    {{ unmatchedSearchQuery.trim() ? "Tiada rekod sepadan dengan carian." : "Tiada rekod unmatched." }}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -1159,6 +1492,7 @@ watch(fileId, load);
                     <button
                       type="button"
                       class="rounded px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50"
+                      @click="openSiasat(row)"
                     >
                       <Eye class="inline h-3.5 w-3.5" /> Siasat
                     </button>
@@ -1166,6 +1500,57 @@ watch(fileId, load);
                 </tr>
                 <tr v-if="varianceResults.length === 0">
                   <td colspan="5" class="px-4 py-8 text-center text-slate-500">Tiada variance.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Duplicate tab -->
+            <table v-if="activeTab === 'duplicate'" class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-slate-100 text-left">
+                  <th class="px-4 py-2 text-xs font-semibold uppercase text-slate-500">IC</th>
+                  <th class="px-4 py-2 text-xs font-semibold uppercase text-slate-500">Nama</th>
+                  <th class="px-4 py-2 text-xs font-semibold uppercase text-slate-500">Tarikh</th>
+                  <th class="px-4 py-2 text-xs font-semibold uppercase text-slate-500">Amaun</th>
+                  <th class="px-4 py-2 text-xs font-semibold uppercase text-slate-500">Rujukan</th>
+                  <th class="px-4 py-2 text-xs font-semibold uppercase text-slate-500">Jenis Pendua</th>
+                  <th class="px-4 py-2 text-right text-xs font-semibold uppercase text-slate-500">Tindakan</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="row in duplicateResults" :key="row.id" class="bg-amber-50/50">
+                  <td class="px-4 py-2 font-mono text-slate-700">{{ row.stagingTx.payerIc ?? "—" }}</td>
+                  <td class="px-4 py-2 text-slate-700">{{ row.stagingTx.payerName ?? "—" }}</td>
+                  <td class="px-4 py-2 text-slate-600">{{ row.stagingTx.txDate }}</td>
+                  <td class="px-4 py-2 text-slate-700">RM {{ Number(row.stagingTx.amount).toFixed(2) }}</td>
+                  <td class="px-4 py-2 text-slate-600">{{ row.stagingTx.sourceTxRef ?? "—" }}</td>
+                  <td class="px-4 py-2">
+                    <span
+                      v-if="row.stagingTx.duplicates?.[0]?.duplicateType === 'CROSS_FILE'"
+                      class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800"
+                    >
+                      Cross File
+                    </span>
+                    <span
+                      v-else-if="row.stagingTx.duplicates?.[0]?.duplicateType === 'SAME_FILE'"
+                      class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                    >
+                      Same File
+                    </span>
+                    <span v-else class="text-slate-500">—</span>
+                  </td>
+                  <td class="px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50"
+                      @click="openSiasat(row)"
+                    >
+                      <Eye class="inline h-3.5 w-3.5" /> Siasat
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="duplicateResults.length === 0">
+                  <td colspan="7" class="px-4 py-8 text-center text-slate-500">Tiada rekod pendua.</td>
                 </tr>
               </tbody>
             </table>
@@ -1204,91 +1589,167 @@ watch(fileId, load);
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="closeManualMatch"
       >
-        <div class="w-full max-w-2xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0">
+        <div
+          :ref="dragManualMatch.modalRef"
+          :style="unref(dragManualMatch.modalStyle)"
+          class="w-full max-w-5xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0"
+            @mousedown="dragManualMatch.onHandleMouseDown"
+          >
             <h3 class="font-semibold text-slate-900">Manual Match — Staging TX #{{ manualMatchModal.row?.stagingTxId }}</h3>
             <button type="button" class="rounded p-1 text-slate-500 hover:bg-slate-100" @click="closeManualMatch">×</button>
           </div>
-          <div class="p-4 space-y-4 overflow-y-auto flex-1">
-            <div v-if="manualMatchModal.row" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm shrink-0">
-              <p class="font-medium text-slate-700">External (staging):</p>
-              <p class="mt-1 text-slate-600">
+          <div class="flex flex-col flex-1 min-h-0">
+            <div v-if="manualMatchModal.row" class="shrink-0 border-b border-slate-100 px-4 py-2 bg-slate-50">
+              <p class="text-xs font-medium text-slate-600">External (staging):</p>
+              <p class="text-sm text-slate-700">
                 IC {{ manualMatchModal.row.stagingTx.payerIc ?? "—" }} | RM {{ Number(manualMatchModal.row.stagingTx.amount).toFixed(2) }} | {{ manualMatchModal.row.stagingTx.txDate }}
               </p>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700">Cari transaksi dalaman (IC / Nama / Rujukan):</label>
-              <div class="mt-1 flex gap-2">
-                <div class="relative flex-1">
-                  <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    v-model="manualMatchSearchQuery"
-                    type="text"
-                    placeholder="Min 2 aksara..."
-                    class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
-                    @keydown.enter.prevent="handleManualMatchSearch"
-                  />
-                </div>
-                <button
-                  type="button"
-                  class="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                  :disabled="manualMatchSearchLoading || manualMatchSearchQuery.trim().length < 2"
-                  @click="handleManualMatchSearch"
-                >
-                  {{ manualMatchSearchLoading ? "..." : "Cari" }}
-                </button>
+            <div class="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-100">
+              <div class="relative flex-1">
+                <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  v-model="manualMatchSearchQuery"
+                  type="text"
+                  placeholder="Cari IC / Nama / Rujukan..."
+                  class="w-full rounded-lg border border-slate-300 py-1.5 pl-9 pr-3 text-sm"
+                  @keydown.enter.prevent="handleManualMatchSearch"
+                />
               </div>
+              <button
+                type="button"
+                class="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+                @click="handleManualMatchSearch"
+              >
+                Cari
+              </button>
+              <span class="text-xs text-slate-500">{{ manualMatchTableTotal }} rekod</span>
             </div>
-            <div v-if="manualMatchSearchResults.length > 0" class="space-y-2">
-              <p class="text-xs font-medium text-slate-600">Pilih rekod dalaman (many-to-one dibenarkan):</p>
-              <div class="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-slate-200 p-2">
-                <button
-                  v-for="r in manualMatchSearchResults"
-                  :key="r.internalTxId"
-                  type="button"
-                  :class="[
-                    'w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                    manualMatchSelected?.internalTxId === r.internalTxId
-                      ? 'border-violet-500 bg-violet-50'
-                      : 'border-slate-200 hover:bg-slate-50',
-                    r.linkedInfo.remainingAmount < Number(manualMatchModal.row?.stagingTx.amount ?? 0)
-                      ? 'opacity-60 cursor-not-allowed'
-                      : '',
-                  ]"
-                  :disabled="r.linkedInfo.remainingAmount < Number(manualMatchModal.row?.stagingTx.amount ?? 0)"
-                  @click="r.linkedInfo.remainingAmount >= Number(manualMatchModal.row?.stagingTx.amount ?? 0) && (manualMatchSelected = r)"
-                >
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-slate-700">{{ r.name }}</span>
-                    <span class="text-slate-500">{{ r.reference }}</span>
-                  </div>
-                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                    <span>RM {{ r.amount.toFixed(2) }}</span>
-                    <span class="text-slate-400">·</span>
-                    <span>{{ r.date }}</span>
-                    <span v-if="r.linkedInfo.linkedCount > 0" class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">
-                      {{ r.linkedInfo.linkedCount }} staging sudah dipadankan · Baki RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
-                    </span>
-                  </div>
-                </button>
-              </div>
+            <div class="flex-1 overflow-auto min-h-0 min-h-[280px]">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+                  <tr class="text-left">
+                    <th class="w-10 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        :checked="manualMatchTableData.length > 0 && manualMatchTableData.every((r) => manualMatchSelectedIds.has(r.internalTxId))"
+                        class="h-4 w-4 rounded accent-violet-600"
+                        @change="toggleManualMatchSelectAll"
+                      />
+                    </th>
+                    <template v-if="internalSourceType === 'BankStatement'">
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">ReferenceNo</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Transaction Date</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Amount</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Description</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Baki</th>
+                    </template>
+                    <template v-else>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">IC</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Nama</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Rujukan</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Jumlah</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Tarikh</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Baki</th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr v-if="manualMatchTableLoading">
+                    <td :colspan="(internalSourceType === 'BankStatement' ? 5 : 6) + 1" class="px-4 py-8 text-center text-slate-500">
+                      <Loader2 class="inline h-5 w-5 animate-spin" /> Memuatkan...
+                    </td>
+                  </tr>
+                  <tr v-else-if="manualMatchTableData.length === 0">
+                    <td :colspan="(internalSourceType === 'BankStatement' ? 5 : 6) + 1" class="px-4 py-8 text-center text-slate-500">Tiada rekod dalaman.</td>
+                  </tr>
+                  <tr
+                    v-else
+                    v-for="r in manualMatchTableData"
+                    :key="r.internalTxId"
+                    :class="[
+                      'cursor-pointer hover:bg-slate-50',
+                      manualMatchSelectedIds.has(r.internalTxId) ? 'bg-violet-50' : '',
+                    ]"
+                    @click="toggleManualMatchSelect(r.internalTxId)"
+                  >
+                    <td class="w-10 px-3 py-2" @click.stop>
+                      <input
+                        type="checkbox"
+                        :checked="manualMatchSelectedIds.has(r.internalTxId)"
+                        class="h-4 w-4 rounded accent-violet-600"
+                        @change="toggleManualMatchSelect(r.internalTxId)"
+                      />
+                    </td>
+                    <template v-if="internalSourceType === 'BankStatement'">
+                      <td class="px-3 py-2 text-slate-600">{{ r.reference }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.date }}</td>
+                      <td class="px-3 py-2 font-medium text-slate-700">RM {{ r.amount.toFixed(2) }}</td>
+                      <td class="px-3 py-2 text-slate-600 max-w-[200px] truncate" :title="r.description ?? ''">{{ r.description ?? "—" }}</td>
+                      <td class="px-3 py-2 text-slate-600">
+                        <span v-if="r.linkedInfo.linkedCount > 0" class="text-amber-700">
+                          RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
+                          <span class="text-xs">({{ r.linkedInfo.linkedCount }} dipadankan)</span>
+                        </span>
+                        <span v-else>RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</span>
+                      </td>
+                    </template>
+                    <template v-else>
+                      <td class="px-3 py-2 font-mono text-slate-700">{{ r.identityNo ?? "—" }}</td>
+                      <td class="px-3 py-2 text-slate-700">{{ r.name }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.reference }}</td>
+                      <td class="px-3 py-2 font-medium text-slate-700">RM {{ r.amount.toFixed(2) }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.date }}</td>
+                      <td class="px-3 py-2 text-slate-600">
+                        <span v-if="r.linkedInfo.linkedCount > 0" class="text-amber-700">
+                          RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
+                          <span class="text-xs">({{ r.linkedInfo.linkedCount }} dipadankan)</span>
+                        </span>
+                        <span v-else>RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</span>
+                      </td>
+                    </template>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <p v-else-if="manualMatchSearchQuery.trim().length >= 2 && !manualMatchSearchLoading" class="text-xs text-slate-500">
-              Tiada keputusan. Cuba kata kunci lain.
-            </p>
+            <div v-if="manualMatchTotalPages > 1" class="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                :disabled="manualMatchPage === 0"
+                @click="manualMatchPage--; fetchManualMatchTable()"
+              >
+                ← Sebelum
+              </button>
+              <span class="text-xs text-slate-600">Halaman {{ manualMatchPage + 1 }} / {{ manualMatchTotalPages }}</span>
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                :disabled="manualMatchPage >= manualMatchTotalPages - 1"
+                @click="manualMatchPage++; fetchManualMatchTable()"
+              >
+                Seterusnya →
+              </button>
+            </div>
           </div>
-          <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-3 shrink-0">
-            <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" @click="closeManualMatch">
-              Batal
-            </button>
-            <button
-              type="button"
-              class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-              :disabled="!manualMatchSelected || manualMatchApplyLoading"
-              @click="handleManualMatchApply"
-            >
-              {{ manualMatchApplyLoading ? "Memproses..." : "Sahkan Match" }}
-            </button>
+          <div class="flex items-center justify-between gap-2 border-t border-slate-200 px-4 py-3 shrink-0">
+            <span class="text-sm text-slate-600">{{ manualMatchSelectedIds.size }} dipilih</span>
+            <div class="flex gap-2">
+              <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" @click="closeManualMatch">
+                Batal
+              </button>
+              <button
+                type="button"
+                class="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                :disabled="manualMatchSelectedIds.size === 0 || manualMatchApplyLoading"
+                @click="handleManualMatchApply"
+              >
+                {{ manualMatchApplyLoading ? "Memproses..." : "Sahkan Match" }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1301,8 +1762,15 @@ watch(fileId, load);
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="closeOneToManyModal"
       >
-        <div class="w-full max-w-2xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0">
+        <div
+          :ref="dragOneToMany.modalRef"
+          :style="unref(dragOneToMany.modalStyle)"
+          class="w-full max-w-2xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0"
+            @mousedown="dragOneToMany.onHandleMouseDown"
+          >
             <h3 class="font-semibold text-slate-900">One-to-Many — 1 staging → banyak dalaman</h3>
             <button type="button" class="rounded p-1 text-slate-500 hover:bg-slate-100" @click="closeOneToManyModal">×</button>
           </div>
@@ -1381,79 +1849,138 @@ watch(fileId, load);
       </div>
     </Teleport>
 
-    <!-- Batch Many-to-One Modal -->
+    <!-- Batch Many-to-One Modal (N:1) -->
     <Teleport to="body">
       <div
         v-if="batchManyToOneModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="closeBatchManyToOneModal"
       >
-        <div class="w-full max-w-2xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0">
-            <h3 class="font-semibold text-slate-900">Padankan banyak ke satu — {{ selectedUnmatchedCount }} staging dipilih</h3>
+        <div
+          :ref="dragBatchManyToOne.modalRef"
+          :style="unref(dragBatchManyToOne.modalStyle)"
+          class="w-full max-w-5xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0"
+            @mousedown="dragBatchManyToOne.onHandleMouseDown"
+          >
+            <h3 class="font-semibold text-slate-900">N:1 — Padankan {{ selectedUnmatchedCount }} staging ke satu dalaman</h3>
             <button type="button" class="rounded p-1 text-slate-500 hover:bg-slate-100" @click="closeBatchManyToOneModal">×</button>
           </div>
-          <div class="p-4 space-y-4 overflow-y-auto flex-1">
-            <div class="rounded-lg border border-violet-200 bg-violet-50/80 p-3 text-sm shrink-0">
-              <p class="font-medium text-violet-800">Jumlah terpilih: RM {{ selectedUnmatchedTotal.toFixed(2) }}</p>
-              <p class="mt-1 text-xs text-violet-700">Pilih satu rekod dalaman untuk memadankan semua staging di atas.</p>
+          <div class="flex flex-col flex-1 min-h-0">
+            <div class="shrink-0 border-b border-slate-100 px-4 py-2 bg-violet-50">
+              <p class="text-sm font-medium text-violet-800">Jumlah staging: RM {{ selectedUnmatchedTotal.toFixed(2) }}</p>
+              <p class="text-xs text-violet-700">Pilih satu rekod dalaman (baki ≥ RM {{ selectedUnmatchedTotal.toFixed(2) }})</p>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700">Cari transaksi dalaman:</label>
-              <div class="mt-1 flex gap-2">
-                <div class="relative flex-1">
-                  <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    v-model="batchSearchQuery"
-                    type="text"
-                    placeholder="IC / Nama / Rujukan (min 2 aksara)..."
-                    class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
-                    @keydown.enter.prevent="handleBatchSearch"
-                  />
-                </div>
-                <button
-                  type="button"
-                  class="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                  :disabled="batchSearchLoading || batchSearchQuery.trim().length < 2"
-                  @click="handleBatchSearch"
-                >
-                  {{ batchSearchLoading ? "..." : "Cari" }}
-                </button>
+            <div class="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-100">
+              <div class="relative flex-1">
+                <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  v-model="batchTableQuery"
+                  type="text"
+                  placeholder="Cari IC / Nama / Rujukan..."
+                  class="w-full rounded-lg border border-slate-300 py-1.5 pl-9 pr-3 text-sm"
+                  @keydown.enter.prevent="fetchBatchTable"
+                />
               </div>
+              <button type="button" class="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700" @click="fetchBatchTable">
+                Cari
+              </button>
+              <span class="text-xs text-slate-500">{{ batchTableTotal }} rekod</span>
             </div>
-            <div v-if="batchSearchResults.length > 0" class="space-y-2">
-              <p class="text-xs font-medium text-slate-600">Pilih rekod dalaman (baki mesti ≥ RM {{ selectedUnmatchedTotal.toFixed(2) }}):</p>
-              <div class="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-slate-200 p-2">
-                <button
-                  v-for="r in batchSearchResults"
-                  :key="r.internalTxId"
-                  type="button"
-                  :class="[
-                    'w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                    batchSelected?.internalTxId === r.internalTxId ? 'border-violet-500 bg-violet-50' : 'border-slate-200 hover:bg-slate-50',
-                    r.linkedInfo.remainingAmount < selectedUnmatchedTotal ? 'opacity-60 cursor-not-allowed' : '',
-                  ]"
-                  :disabled="r.linkedInfo.remainingAmount < selectedUnmatchedTotal"
-                  @click="r.linkedInfo.remainingAmount >= selectedUnmatchedTotal && (batchSelected = r)"
-                >
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-slate-700">{{ r.name }}</span>
-                    <span class="text-slate-500">{{ r.reference }}</span>
-                  </div>
-                  <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                    <span>RM {{ r.amount.toFixed(2) }}</span>
-                    <span class="text-slate-400">·</span>
-                    <span>{{ r.date }}</span>
-                    <span v-if="r.linkedInfo.linkedCount > 0" class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">
-                      {{ r.linkedInfo.linkedCount }} sudah dipadankan · Baki RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
-                    </span>
-                  </div>
-                </button>
-              </div>
+            <div class="flex-1 overflow-auto min-h-0">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-slate-50 border-b border-slate-200">
+                  <tr class="text-left">
+                    <template v-if="internalSourceType === 'BankStatement'">
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">ReferenceNo</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Transaction Date</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Amount</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Description</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Baki</th>
+                    </template>
+                    <template v-else>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">IC</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Nama</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Rujukan</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Jumlah</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Tarikh</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Baki</th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr v-if="batchTableLoading">
+                    <td :colspan="internalSourceType === 'BankStatement' ? 5 : 6" class="px-4 py-8 text-center text-slate-500">
+                      <Loader2 class="inline h-5 w-5 animate-spin" /> Memuatkan...
+                    </td>
+                  </tr>
+                  <tr v-else-if="batchTableData.length === 0">
+                    <td :colspan="internalSourceType === 'BankStatement' ? 5 : 6" class="px-4 py-8 text-center text-slate-500">Tiada rekod dalaman.</td>
+                  </tr>
+                  <tr
+                    v-else
+                    v-for="r in batchTableData"
+                    :key="r.internalTxId"
+                    :class="[
+                      'cursor-pointer hover:bg-slate-50',
+                      batchSelected?.internalTxId === r.internalTxId ? 'bg-violet-100' : '',
+                      r.linkedInfo.remainingAmount < selectedUnmatchedTotal ? 'opacity-50' : '',
+                    ]"
+                    :title="r.linkedInfo.remainingAmount < selectedUnmatchedTotal ? 'Baki tidak mencukupi' : ''"
+                    @click="r.linkedInfo.remainingAmount >= selectedUnmatchedTotal && (batchSelected = r)"
+                  >
+                    <template v-if="internalSourceType === 'BankStatement'">
+                      <td class="px-3 py-2 text-slate-600">{{ r.reference }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.date }}</td>
+                      <td class="px-3 py-2 font-medium text-slate-700">RM {{ r.amount.toFixed(2) }}</td>
+                      <td class="px-3 py-2 text-slate-600 max-w-[200px] truncate" :title="r.description ?? ''">{{ r.description ?? '—' }}</td>
+                      <td class="px-3 py-2 text-slate-600">
+                        <span v-if="r.linkedInfo.linkedCount > 0" class="text-amber-700">
+                          RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
+                          <span class="text-xs">({{ r.linkedInfo.linkedCount }} dipadankan)</span>
+                        </span>
+                        <span v-else>RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</span>
+                      </td>
+                    </template>
+                    <template v-else>
+                      <td class="px-3 py-2 font-mono text-slate-700">{{ r.identityNo ?? '—' }}</td>
+                      <td class="px-3 py-2 text-slate-700">{{ r.name }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.reference }}</td>
+                      <td class="px-3 py-2 font-medium text-slate-700">RM {{ r.amount.toFixed(2) }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.date }}</td>
+                      <td class="px-3 py-2 text-slate-600">
+                        <span v-if="r.linkedInfo.linkedCount > 0" class="text-amber-700">
+                          RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
+                          <span class="text-xs">({{ r.linkedInfo.linkedCount }} dipadankan)</span>
+                        </span>
+                        <span v-else>RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</span>
+                      </td>
+                    </template>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <p v-else-if="batchSearchQuery.trim().length >= 2 && !batchSearchLoading" class="text-xs text-slate-500">
-              Tiada keputusan. Cuba kata kunci lain.
-            </p>
+            <div v-if="batchTotalPages > 1" class="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                :disabled="batchPage === 0"
+                @click="batchPage--; fetchBatchTable()"
+              >
+                ← Sebelum
+              </button>
+              <span class="text-xs text-slate-600">Halaman {{ batchPage + 1 }} / {{ batchTotalPages }}</span>
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                :disabled="batchPage >= batchTotalPages - 1"
+                @click="batchPage++; fetchBatchTable()"
+              >
+                Seterusnya →
+              </button>
+            </div>
           </div>
           <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-3 shrink-0">
             <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" @click="closeBatchManyToOneModal">
@@ -1472,95 +1999,172 @@ watch(fileId, load);
       </div>
     </Teleport>
 
-    <!-- Batch One-to-Many Modal -->
+    <!-- Batch One-to-Many Modal (1:N) -->
     <Teleport to="body">
       <div
         v-if="batchOneToManyModal"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="closeBatchOneToManyModal"
       >
-        <div class="w-full max-w-3xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0">
-            <h3 class="font-semibold text-slate-900">Batch 1:N — {{ batchOneToManyItems.length }} staging</h3>
+        <div
+          :ref="dragBatchOneToMany.modalRef"
+          :style="unref(dragBatchOneToMany.modalStyle)"
+          class="w-full max-w-5xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0"
+            @mousedown="dragBatchOneToMany.onHandleMouseDown"
+          >
+            <h3 class="font-semibold text-slate-900">1:N — {{ batchOneToManyItems.length }} staging · Pilih ≥2 dalaman per baris</h3>
             <button type="button" class="rounded p-1 text-slate-500 hover:bg-slate-100" @click="closeBatchOneToManyModal">×</button>
           </div>
-          <div class="p-4 space-y-4 overflow-y-auto flex-1">
-            <div>
-              <label class="block text-sm font-medium text-slate-700">Cari untuk tambah ke baris aktif:</label>
-              <div class="mt-1 flex gap-2">
-                <div class="relative flex-1">
-                  <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    v-model="batchOneToManySearchQuery"
-                    type="text"
-                    placeholder="Min 2 aksara..."
-                    class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
-                    @keydown.enter.prevent="handleBatchOneToManySearch"
-                  />
-                </div>
+          <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div class="shrink-0 border-b border-slate-100 px-4 py-2 space-y-2 max-h-36 overflow-y-auto">
+              <p class="text-xs font-medium text-slate-600">Baris staging (pilih baris, kemudian pilih dari jadual bawah):</p>
+              <div class="flex flex-wrap gap-2">
                 <button
-                  type="button"
-                  class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                  :disabled="batchOneToManySearchLoading || batchOneToManySearchQuery.trim().length < 2"
-                  @click="handleBatchOneToManySearch"
-                >
-                  {{ batchOneToManySearchLoading ? "..." : "Cari" }}
-                </button>
-              </div>
-            </div>
-            <div v-if="batchOneToManySearchResults.length > 0" class="rounded-lg border border-slate-200 p-2 max-h-32 overflow-y-auto">
-              <p class="text-xs font-medium text-slate-600 mb-2">Klik untuk tambah ke baris:</p>
-              <div class="flex flex-wrap gap-1">
-                <button
-                  v-for="r in batchOneToManySearchResults"
-                  :key="r.internalTxId"
-                  type="button"
-                  class="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
-                  @click="batchOneToManyActiveIndex >= 0 && addToBatchOneToManyItem(batchOneToManyActiveIndex, r)"
-                >
-                  {{ r.reference }} RM {{ r.amount.toFixed(2) }}
-                </button>
-              </div>
-            </div>
-            <div class="space-y-2">
-              <p class="text-xs font-medium text-slate-600">Setiap baris: pilih baris, cari, tambah ≥2 rekod (jumlah ≈ staging):</p>
-              <div class="space-y-2 max-h-48 overflow-y-auto">
-                <div
                   v-for="(item, idx) in batchOneToManyItems"
                   :key="item.row.id"
+                  type="button"
                   :class="[
-                    'rounded-lg border p-3 text-sm',
-                    batchOneToManyActiveIndex === idx ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200',
+                    'rounded-lg border px-3 py-1.5 text-sm',
+                    batchOneToManyActiveIndex === idx ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50',
                   ]"
+                  @click="batchOneToManyActiveIndex = idx"
                 >
-                  <div class="flex items-center justify-between gap-2">
-                    <div>
-                      <span class="font-medium">{{ item.row.stagingTx.payerName }}</span>
-                      <span class="text-slate-500 ml-2">RM {{ Number(item.row.stagingTx.amount).toFixed(2) }}</span>
-                    </div>
-                    <button
-                      type="button"
-                      class="rounded px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100"
-                      @click="batchOneToManyActiveIndex = idx"
-                    >
-                      Pilih baris
-                    </button>
-                  </div>
-                  <div class="mt-2 flex flex-wrap gap-1">
-                    <span
-                      v-for="s in item.selected"
-                      :key="s.internalTxId"
-                      class="inline-flex items-center gap-1 rounded bg-slate-200 px-2 py-0.5 text-xs"
-                    >
-                      {{ s.reference }} RM {{ s.amount.toFixed(2) }}
-                      <button type="button" class="hover:text-rose-600" @click="removeFromBatchOneToManyItem(idx, s.internalTxId)">×</button>
-                    </span>
-                  </div>
-                  <p class="mt-1 text-xs" :class="getBatchOneToManyItemTotal(idx) >= Number(item.row.stagingTx.amount) * 0.98 && getBatchOneToManyItemTotal(idx) <= Number(item.row.stagingTx.amount) * 1.02 ? 'text-emerald-600' : 'text-slate-500'">
-                    Jumlah: RM {{ getBatchOneToManyItemTotal(idx).toFixed(2) }} / RM {{ Number(item.row.stagingTx.amount).toFixed(2) }}
-                  </p>
-                </div>
+                  {{ item.row.stagingTx.payerName }} RM {{ Number(item.row.stagingTx.amount).toFixed(2) }}
+                  <span class="ml-1 text-xs" :class="getBatchOneToManyItemTotal(idx) >= Number(item.row.stagingTx.amount) * 0.99 && getBatchOneToManyItemTotal(idx) <= Number(item.row.stagingTx.amount) * 1.01 ? 'text-emerald-600' : 'text-slate-500'">
+                    ({{ item.selected.length }})
+                  </span>
+                </button>
               </div>
+            </div>
+            <div class="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-slate-100">
+              <div class="relative flex-1">
+                <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  v-model="batchOneToManyTableQuery"
+                  type="text"
+                  placeholder="Cari IC / Nama / Rujukan..."
+                  class="w-full rounded-lg border border-slate-300 py-1.5 pl-9 pr-3 text-sm"
+                  @keydown.enter.prevent="fetchBatchOneToManyTable"
+                />
+              </div>
+              <button type="button" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700" @click="fetchBatchOneToManyTable">
+                Cari
+              </button>
+              <button
+                type="button"
+                class="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                :disabled="batchOneToManySelectedIds.size === 0"
+                @click="addSelectedToBatchOneToManyRow"
+              >
+                Tambah ke baris ({{ batchOneToManySelectedIds.size }})
+              </button>
+              <span class="text-xs text-slate-500">{{ batchOneToManyTableTotal }} rekod</span>
+            </div>
+            <div class="flex-1 overflow-auto min-h-0">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-slate-50 border-b border-slate-200">
+                  <tr class="text-left">
+                    <th class="w-10 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        :checked="batchOneToManyTableData.length > 0 && batchOneToManyTableData.every((r) => batchOneToManySelectedIds.has(r.internalTxId))"
+                        class="h-4 w-4 rounded accent-indigo-600"
+                        @change="toggleBatchOneToManySelectAll"
+                      />
+                    </th>
+                    <template v-if="internalSourceType === 'BankStatement'">
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">ReferenceNo</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Transaction Date</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Amount</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Description</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Baki</th>
+                    </template>
+                    <template v-else>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">IC</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Nama</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Rujukan</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Jumlah</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Tarikh</th>
+                      <th class="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Baki</th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr v-if="batchOneToManyTableLoading">
+                    <td :colspan="(internalSourceType === 'BankStatement' ? 5 : 6) + 1" class="px-4 py-8 text-center text-slate-500">
+                      <Loader2 class="inline h-5 w-5 animate-spin" /> Memuatkan...
+                    </td>
+                  </tr>
+                  <tr v-else-if="batchOneToManyTableData.length === 0">
+                    <td :colspan="(internalSourceType === 'BankStatement' ? 5 : 6) + 1" class="px-4 py-8 text-center text-slate-500">Tiada rekod dalaman.</td>
+                  </tr>
+                  <tr
+                    v-else
+                    v-for="r in batchOneToManyTableData"
+                    :key="r.internalTxId"
+                    :class="['cursor-pointer hover:bg-slate-50', batchOneToManySelectedIds.has(r.internalTxId) ? 'bg-indigo-50' : '']"
+                    @click="toggleBatchOneToManySelect(r.internalTxId)"
+                  >
+                    <td class="w-10 px-3 py-2" @click.stop>
+                      <input
+                        type="checkbox"
+                        :checked="batchOneToManySelectedIds.has(r.internalTxId)"
+                        class="h-4 w-4 rounded accent-indigo-600"
+                        @change="toggleBatchOneToManySelect(r.internalTxId)"
+                      />
+                    </td>
+                    <template v-if="internalSourceType === 'BankStatement'">
+                      <td class="px-3 py-2 text-slate-600">{{ r.reference }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.date }}</td>
+                      <td class="px-3 py-2 font-medium text-slate-700">RM {{ r.amount.toFixed(2) }}</td>
+                      <td class="px-3 py-2 text-slate-600 max-w-[200px] truncate" :title="r.description ?? ''">{{ r.description ?? '—' }}</td>
+                      <td class="px-3 py-2 text-slate-600">
+                        <span v-if="r.linkedInfo.linkedCount > 0" class="text-amber-700">
+                          RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
+                          <span class="text-xs">({{ r.linkedInfo.linkedCount }} dipadankan)</span>
+                        </span>
+                        <span v-else>RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</span>
+                      </td>
+                    </template>
+                    <template v-else>
+                      <td class="px-3 py-2 font-mono text-slate-700">{{ r.identityNo ?? '—' }}</td>
+                      <td class="px-3 py-2 text-slate-700">{{ r.name }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.reference }}</td>
+                      <td class="px-3 py-2 font-medium text-slate-700">RM {{ r.amount.toFixed(2) }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ r.date }}</td>
+                      <td class="px-3 py-2 text-slate-600">
+                        <span v-if="r.linkedInfo.linkedCount > 0" class="text-amber-700">
+                          RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}
+                          <span class="text-xs">({{ r.linkedInfo.linkedCount }} dipadankan)</span>
+                        </span>
+                        <span v-else>RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</span>
+                      </td>
+                    </template>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="batchOneToManyTotalPages > 1" class="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                :disabled="batchOneToManyPage === 0"
+                @click="batchOneToManyPage--; fetchBatchOneToManyTable()"
+              >
+                ← Sebelum
+              </button>
+              <span class="text-xs text-slate-600">Halaman {{ batchOneToManyPage + 1 }} / {{ batchOneToManyTotalPages }}</span>
+              <button
+                type="button"
+                class="rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                :disabled="batchOneToManyPage >= batchOneToManyTotalPages - 1"
+                @click="batchOneToManyPage++; fetchBatchOneToManyTable()"
+              >
+                Seterusnya →
+              </button>
             </div>
           </div>
           <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-3 shrink-0">
@@ -1587,8 +2191,15 @@ watch(fileId, load);
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="closeManyToManyModal"
       >
-        <div class="w-full max-w-4xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0">
+        <div
+          :ref="dragManyToMany.modalRef"
+          :style="unref(dragManyToMany.modalStyle)"
+          class="w-full max-w-4xl rounded-xl bg-white shadow-xl max-h-[90vh] flex flex-col"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3 shrink-0"
+            @mousedown="dragManyToMany.onHandleMouseDown"
+          >
             <h3 class="font-semibold text-slate-900">
               N:M — {{ manyToManyGroups.length }} kumpulan · Peruntukan amaun per pautan
             </h3>
@@ -1627,42 +2238,93 @@ watch(fileId, load);
                 </p>
               </div>
 
-              <div>
-                <label class="block text-sm font-medium text-slate-700">Cari transaksi dalaman:</label>
-                <div class="mt-1 flex gap-2">
+              <div v-if="activeManyToManyGroupIndex === gi" class="space-y-2">
+                <div class="flex items-center gap-2">
                   <div class="relative flex-1">
                     <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
-                      v-model="manyToManySearchQuery"
+                      v-model="manyToManyTableQuery"
                       type="text"
-                      placeholder="IC / Nama / Rujukan (min 2 aksara)..."
-                      class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm"
-                      @keydown.enter.prevent="handleManyToManySearch"
+                      placeholder="Cari IC / Nama / Rujukan..."
+                      class="w-full rounded-lg border border-slate-300 py-1.5 pl-9 pr-3 text-sm"
+                      @keydown.enter.prevent="fetchManyToManyTable"
                     />
                   </div>
+                  <button type="button" class="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700" @click="fetchManyToManyTable">
+                    Cari
+                  </button>
                   <button
                     type="button"
-                    class="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                    :disabled="manyToManySearchLoading || manyToManySearchQuery.trim().length < 2"
-                    @click="handleManyToManySearch"
+                    class="rounded-lg border border-teal-600 px-3 py-1.5 text-sm font-medium text-teal-600 hover:bg-teal-50 disabled:opacity-50"
+                    :disabled="manyToManySelectedIds.size === 0"
+                    @click="addSelectedToManyToManyGroup"
                   >
-                    {{ manyToManySearchLoading ? "..." : "Cari" }}
+                    Tambah ke kumpulan ({{ manyToManySelectedIds.size }})
                   </button>
+                  <span class="text-xs text-slate-500">{{ manyToManyTableTotal }} rekod</span>
                 </div>
-              </div>
-
-              <div v-if="manyToManySearchResults.length > 0 && activeManyToManyGroupIndex === gi" class="rounded-lg border border-slate-200 p-2 max-h-28 overflow-y-auto">
-                <p class="text-xs font-medium text-slate-600 mb-2">Klik untuk tambah ke kumpulan {{ gi + 1 }}:</p>
-                <div class="flex flex-wrap gap-1">
-                  <button
-                    v-for="r in manyToManySearchResults"
-                    :key="r.internalTxId"
-                    type="button"
-                    class="rounded bg-teal-100 px-2 py-1 text-xs font-medium text-teal-800 hover:bg-teal-200"
-                    @click="addManyToManyInternal(r, gi)"
-                  >
-                    {{ r.reference }} RM {{ r.amount.toFixed(2) }}
-                  </button>
+                <div class="max-h-40 overflow-auto rounded-lg border border-slate-200">
+                  <table class="w-full text-sm">
+                    <thead class="sticky top-0 bg-slate-50 border-b border-slate-200">
+                      <tr class="text-left">
+                        <th class="w-10 px-2 py-1.5">
+                          <input type="checkbox" :checked="manyToManyTableData.length > 0 && manyToManyTableData.every((r) => manyToManySelectedIds.has(r.internalTxId))" class="h-3.5 w-3.5 rounded accent-teal-600" @change="toggleManyToManySelectAll" />
+                        </th>
+                        <template v-if="internalSourceType === 'BankStatement'">
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">ReferenceNo</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Transaction Date</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Amount</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Description</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Baki</th>
+                        </template>
+                        <template v-else>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">IC</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Nama</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Rujukan</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Jumlah</th>
+                          <th class="px-2 py-1.5 text-xs font-semibold text-slate-500">Baki</th>
+                        </template>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      <tr v-if="manyToManyTableLoading">
+                        <td :colspan="(internalSourceType === 'BankStatement' ? 5 : 5) + 1" class="px-4 py-4 text-center text-slate-500"><Loader2 class="inline h-4 w-4 animate-spin" /></td>
+                      </tr>
+                      <tr v-else-if="manyToManyTableData.length === 0">
+                        <td :colspan="(internalSourceType === 'BankStatement' ? 5 : 5) + 1" class="px-4 py-4 text-center text-slate-500">Tiada rekod.</td>
+                      </tr>
+                      <tr
+                        v-else
+                        v-for="r in manyToManyTableData"
+                        :key="r.internalTxId"
+                        :class="['cursor-pointer hover:bg-slate-50', manyToManySelectedIds.has(r.internalTxId) ? 'bg-teal-50' : '']"
+                        @click="toggleManyToManySelect(r.internalTxId)"
+                      >
+                        <td class="w-10 px-2 py-1.5" @click.stop>
+                          <input type="checkbox" :checked="manyToManySelectedIds.has(r.internalTxId)" class="h-3.5 w-3.5 rounded accent-teal-600" @change="toggleManyToManySelect(r.internalTxId)" />
+                        </td>
+                        <template v-if="internalSourceType === 'BankStatement'">
+                          <td class="px-2 py-1.5 text-slate-600">{{ r.reference }}</td>
+                          <td class="px-2 py-1.5 text-slate-600">{{ r.date }}</td>
+                          <td class="px-2 py-1.5 font-medium">RM {{ r.amount.toFixed(2) }}</td>
+                          <td class="px-2 py-1.5 text-slate-600 max-w-[150px] truncate" :title="r.description ?? ''">{{ r.description ?? '—' }}</td>
+                          <td class="px-2 py-1.5 text-slate-600">RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</td>
+                        </template>
+                        <template v-else>
+                          <td class="px-2 py-1.5 font-mono text-xs">{{ r.identityNo ?? '—' }}</td>
+                          <td class="px-2 py-1.5 text-slate-700">{{ r.name }}</td>
+                          <td class="px-2 py-1.5 text-slate-600">{{ r.reference }}</td>
+                          <td class="px-2 py-1.5 font-medium">RM {{ r.amount.toFixed(2) }}</td>
+                          <td class="px-2 py-1.5 text-slate-600">RM {{ r.linkedInfo.remainingAmount.toFixed(2) }}</td>
+                        </template>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-if="manyToManyTotalPages > 1" class="flex justify-center gap-2">
+                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50" :disabled="manyToManyPage === 0" @click="manyToManyPage--; fetchManyToManyTable()">←</button>
+                  <span class="text-xs text-slate-600">{{ manyToManyPage + 1 }} / {{ manyToManyTotalPages }}</span>
+                  <button type="button" class="rounded px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50" :disabled="manyToManyPage >= manyToManyTotalPages - 1" @click="manyToManyPage++; fetchManyToManyTable()">→</button>
                 </div>
               </div>
 
@@ -1775,8 +2437,15 @@ watch(fileId, load);
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="closeForceMatch"
       >
-        <div class="w-full max-w-lg rounded-xl bg-white shadow-xl">
-          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div
+          :ref="dragForceMatch.modalRef"
+          :style="unref(dragForceMatch.modalStyle)"
+          class="w-full max-w-lg rounded-xl bg-white shadow-xl"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3"
+            @mousedown="dragForceMatch.onHandleMouseDown"
+          >
             <h3 class="font-semibold text-slate-900">Force Match — Override Penyelia</h3>
             <button type="button" class="rounded p-1 text-slate-500 hover:bg-slate-100" @click="closeForceMatch">×</button>
           </div>
@@ -1811,6 +2480,97 @@ watch(fileId, load);
             </button>
             <button type="button" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700" disabled>
               Force Match
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Siasat Modal -->
+    <Teleport to="body">
+      <div
+        v-if="siasatModal.open"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        @click.self="closeSiasat"
+      >
+        <div
+          :ref="dragSiasat.modalRef"
+          :style="unref(dragSiasat.modalStyle)"
+          class="w-full max-w-lg rounded-xl bg-white shadow-xl"
+        >
+          <div
+            class="flex cursor-move items-center justify-between border-b border-slate-200 px-4 py-3"
+            @mousedown="dragSiasat.onHandleMouseDown"
+          >
+            <h3 class="font-semibold text-slate-900">
+              Siasat — {{ siasatModal.row?.matchRule === 'STAGING_DUPLICATE' ? 'Duplicate' : 'Variance' }}
+            </h3>
+            <button type="button" class="rounded p-1 text-slate-500 hover:bg-slate-100" @click="closeSiasat">×</button>
+          </div>
+          <div v-if="siasatModal.row" class="p-4 space-y-4">
+            <!-- Staging (current row - duplicate or variance) -->
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <h4 class="mb-2 font-medium text-slate-700">Transaksi Staging</h4>
+              <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-slate-600">
+                <dt>IC:</dt><dd>{{ siasatModal.row.stagingTx?.payerIc ?? "—" }}</dd>
+                <dt>Nama:</dt><dd>{{ siasatModal.row.stagingTx?.payerName ?? "—" }}</dd>
+                <dt>Tarikh:</dt><dd>{{ siasatModal.row.stagingTx?.txDate ?? "—" }}</dd>
+                <dt>Amaun:</dt><dd class="font-medium">RM {{ Number(siasatModal.row.stagingTx?.amount ?? 0).toFixed(2) }}</dd>
+                <dt>Rujukan:</dt><dd>{{ siasatModal.row.stagingTx?.sourceTxRef ?? "—" }}</dd>
+              </dl>
+            </div>
+            <!-- Internal / Matched row -->
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <h4 class="mb-2 font-medium text-slate-700">
+                {{ siasatModal.row.matchRule === 'STAGING_DUPLICATE' ? 'Rekod yang diduplikasi' : 'Transaksi Dalaman' }}
+              </h4>
+              <div v-if="siasatLoading" class="py-2 text-slate-500">Memuatkan...</div>
+              <template v-else-if="siasatInternalDetail">
+                <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-slate-600">
+                  <dt>Jenis:</dt><dd>{{ siasatInternalDetail.type }}</dd>
+                  <dt>Rujukan:</dt><dd>{{ siasatInternalDetail.reference ?? "—" }}</dd>
+                  <dt>Nama:</dt><dd>{{ siasatInternalDetail.name ?? "—" }}</dd>
+                  <dt>IC:</dt><dd>{{ siasatInternalDetail.identityNo ?? "—" }}</dd>
+                  <dt>Tarikh:</dt><dd>{{ siasatInternalDetail.date }}</dd>
+                  <dt>Amaun:</dt><dd class="font-medium">RM {{ Number(siasatInternalDetail.amount).toFixed(2) }}</dd>
+                  <template v-if="'fileName' in siasatInternalDetail && siasatInternalDetail.fileName">
+                    <dt>Fail:</dt><dd>{{ siasatInternalDetail.fileName }}</dd>
+                  </template>
+                </dl>
+              </template>
+              <p v-else class="py-2 text-slate-500">
+                {{ siasatModal.row.matchRule === 'STAGING_DUPLICATE' ? 'Tiada rekod dipaut' : 'Tiada transaksi dalaman dipaut' }}
+              </p>
+            </div>
+            <!-- Variance / Duplicate explanation -->
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+              <h4 class="mb-2 font-medium text-amber-800">
+                {{ siasatModal.row.matchRule === 'STAGING_DUPLICATE' ? 'Jenis Pendua' : 'Jenis Variance' }}
+              </h4>
+              <template v-if="siasatModal.row.matchRule === 'STAGING_DUPLICATE'">
+                <p class="text-amber-700">
+                  {{ siasatModal.row.stagingTx?.duplicates?.[0]?.duplicateType === 'CROSS_FILE'
+                    ? 'Rekod sama dalam fail lain (Cross File)'
+                    : 'Rekod sama dalam fail yang sama (Same File)' }}
+                </p>
+                <p v-if="siasatModal.row.stagingTx?.duplicates?.[0]?.reason" class="mt-2 text-amber-700 text-xs">
+                  {{ siasatModal.row.stagingTx.duplicates[0].reason }}
+                </p>
+              </template>
+              <template v-else>
+                <p class="text-amber-700">
+                  {{ siasatModal.row.matchRule === "AMOUNT_VARIANCE" ? "Perbezaan amaun" : siasatModal.row.matchRule ?? "—" }}
+                </p>
+                <p v-if="siasatModal.row.matchRule === 'AMOUNT_VARIANCE' && siasatInternalDetail" class="mt-2 text-amber-700">
+                  Staging: RM {{ Number(siasatModal.row.stagingTx?.amount ?? 0).toFixed(2) }} vs
+                  Dalaman: RM {{ Number(siasatInternalDetail.amount).toFixed(2) }}
+                </p>
+              </template>
+            </div>
+          </div>
+          <div class="flex justify-end border-t border-slate-200 px-4 py-3">
+            <button type="button" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" @click="closeSiasat">
+              Tutup
             </button>
           </div>
         </div>

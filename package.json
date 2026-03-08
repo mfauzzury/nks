@@ -24,7 +24,13 @@
     "db:push": "npm run db:push -w apps/api-server",
     "db:seed": "npm run db:seed -w apps/api-server",
     "db:studio": "npm run db:studio -w apps/api-server",
-    "generate:jan-sample": "npm run generate:jan-sample -w apps/api-server"
+    "generate:jan-sample": "npm run generate:jan-sample -w apps/api-server",
+    "generate:psp-sample-1007": "npm run generate:psp-sample-1007 -w apps/api-server",
+    "generate:psp-sample-1008": "npm run generate:psp-sample-1008 -w apps/api-server",
+    "generate:jan-sample-1017": "npm run generate:jan-sample-1017 -w apps/api-server",
+    "generate:jan-sample-1017:seed": "npm run generate:jan-sample-1017:seed -w apps/api-server",
+    "generate:jan-sample-1018": "npm run generate:jan-sample-1018 -w apps/api-server",
+    "generate:jan-sample-1018:seed": "npm run generate:jan-sample-1018:seed -w apps/api-server"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
