@@ -11,18 +11,18 @@ export default function PortalLoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [identityNo, setIdentityNo] = useState("900202101001");
+  const [password, setPassword] = useState("");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const form = new FormData(e.currentTarget);
-
     try {
       const res = await loginPayer({
-        identityNo: String(form.get("identityNo") || ""),
-        password: String(form.get("password") || ""),
+        identityNo: identityNo.trim(),
+        password,
       });
 
       savePortalSession(res.data);
@@ -55,7 +55,7 @@ export default function PortalLoginPage() {
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-white/20">
               <img
-                src="https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80"
+                src="/images/malaysian-muslim-portal.jpg"
                 alt="Pengguna menggunakan portal digital"
                 className="h-40 w-full object-cover"
               />
@@ -76,10 +76,22 @@ export default function PortalLoginPage() {
 
             <div className="mt-4 space-y-3">
               <label className="grid gap-1 text-sm text-slate-700">
+                Akaun Demo Cepat
+                <select
+                  value={identityNo}
+                  onChange={(e) => setIdentityNo(e.target.value)}
+                  className="rounded-lg border-2 border-slate-400 bg-white px-4 py-3 text-base outline-none transition portal-focus"
+                >
+                  <option value="900202101001">900202101001</option>
+                  <option value="201200400">201200400</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm text-slate-700">
                 IC / Passport / SSM
                 <input
                   name="identityNo"
-                  required
+                  value={identityNo}
+                  onChange={(e) => setIdentityNo(e.target.value)}
                   placeholder="Contoh: 900101011234 atau 202301012345"
                   className="rounded-lg border-2 border-slate-400 px-4 py-3 text-base outline-none transition portal-focus"
                 />
@@ -89,8 +101,9 @@ export default function PortalLoginPage() {
                 <input
                   type="password"
                   name="password"
-                  required
-                  placeholder="Masukkan kata laluan"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Kosongkan untuk akaun demo"
                   className="rounded-lg border-2 border-slate-400 px-4 py-3 text-base outline-none transition portal-focus"
                 />
               </label>

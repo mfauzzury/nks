@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus, SpgPayrollBatchStatus, SpgPayrollPaymentChannel } from "@prisma/client";
 import pkg from "@prisma/client";
 const { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus } = pkg;
 import { Router } from "express";
@@ -11,7 +12,7 @@ import { prisma } from "../prisma.js";
 import type { AuthedRequest } from "../types.js";
 import { requireRole, writeAuditLog } from "../utils/payer.js";
 import { sendError, sendOk } from "../utils/responses.js";
-import { counterDepositCreateSchema, counterDepositsQuerySchema, counterPaymentCreateSchema, counterPaymentsQuerySchema } from "./schemas.js";
+import { counterDepositCreateSchema, counterDepositsQuerySchema, counterPaymentCreateSchema, counterPaymentsQuerySchema, counterSpgBatchCreateSchema } from "./schemas.js";
 
 export const counterRouter = Router();
 
@@ -449,4 +450,174 @@ counterRouter.delete("/deposits/:id/slip-file", async (req: AuthedRequest, res) 
   return sendOk(res, { success: true });
 });
 
+/* ── Counter SPG Batch ─────────────────────────────── */
+
+function buildCounterSpgReferenceNo() {
+  const rand = Math.floor(Math.random() * 900000) + 100000;
+  return `SPG-CTR-${Date.now()}-${rand}`;
+}
+
+counterRouter.post("/spg-batch", async (req: AuthedRequest, res) => {
+  const actor = await requireRole(req.auth?.userId, ["counter", "penyelia", "eksekutif pemprosesan"], res);
+  if (!actor) return;
+
+  const parsed = counterSpgBatchCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 400, "VALIDATION_ERROR", parsed.error.issues.map((x) => x.message).join(", "));
+  }
+  const input = parsed.data;
+
+  // Verify employer exists and is corporate/majikan_spg
+  const employer = await prisma.payerProfile.findFirst({
+    where: {
+      id: input.employerPayerId,
+      payerType: { in: ["korporat", "majikan_spg"] },
+      status: { not: "merged" },
+    },
+  });
+  if (!employer) {
+    return sendError(res, 404, "NOT_FOUND", "Corporate payer not found or not eligible for SPG");
+  }
+
+  // Normalize and validate rows
+  const normalizedRows = input.rows.map((row, idx) => ({
+    rowNo: idx + 1,
+    employeeName: row.employeeName.trim(),
+    employeeIdentityNo: normalizeIdentity(row.employeeIdentityNo),
+    amount: row.amount,
+  }));
+
+  // Check for duplicates within the submitted rows
+  const icCounts = new Map<string, number>();
+  for (const row of normalizedRows) {
+    const key = row.employeeIdentityNo;
+    icCounts.set(key, (icCounts.get(key) || 0) + 1);
+  }
+  const inFileDupes = new Set<string>();
+  for (const [key, count] of icCounts) {
+    if (count > 1) inFileDupes.add(key);
+  }
+
+  // Check for duplicates against existing batches for same employer/month/year
+  const existingLines = normalizedRows.length
+    ? await prisma.spgPayrollLine.findMany({
+        where: {
+          employeeIdentityNo: { in: normalizedRows.map((r) => r.employeeIdentityNo) },
+          batch: {
+            employerPayerId: input.employerPayerId,
+            month: input.month,
+            year: input.year,
+            status: { notIn: [SpgPayrollBatchStatus.cancelled, SpgPayrollBatchStatus.paid_failed] },
+          },
+        },
+        select: { employeeIdentityNo: true },
+      })
+    : [];
+  const existingSet = new Set(existingLines.map((x) => normalizeIdentity(x.employeeIdentityNo)));
+
+  // Check against agreed deduction amounts from SpgEmployee records
+  const agreedRecords = normalizedRows.length
+    ? await prisma.spgEmployee.findMany({
+        where: {
+          employerPayerId: input.employerPayerId,
+          employeeIdentityNo: { in: normalizedRows.map((r) => r.employeeIdentityNo) },
+        },
+        select: { employeeIdentityNo: true, deductionAmount: true },
+      })
+    : [];
+  const agreedMap = new Map<string, number>();
+  for (const emp of agreedRecords) {
+    if (emp.deductionAmount != null) {
+      agreedMap.set(normalizeIdentity(emp.employeeIdentityNo), Number(emp.deductionAmount));
+    }
+  }
+
+  // Validate amounts against agreed amounts — hard error if mismatch
+  const amountMismatches = normalizedRows
+    .filter((r) => {
+      const agreed = agreedMap.get(r.employeeIdentityNo);
+      return agreed !== undefined && r.amount !== agreed;
+    })
+    .map((r) => ({
+      employeeIdentityNo: r.employeeIdentityNo,
+      employeeName: r.employeeName,
+      submitted: r.amount,
+      agreed: agreedMap.get(r.employeeIdentityNo)!,
+    }));
+
+  if (amountMismatches.length > 0) {
+    const details = amountMismatches
+      .map((m) => `${m.employeeName} (${m.employeeIdentityNo}): dihantar RM ${m.submitted.toFixed(2)}, perjanjian RM ${m.agreed.toFixed(2)}`)
+      .join("; ");
+    return sendError(res, 400, "VALIDATION_ERROR", `Amaun tidak sepadan dengan perjanjian: ${details}`);
+  }
+
+  const totalAmount = normalizedRows.reduce((sum, row) => sum + row.amount, 0);
+  const paymentChannel = input.paymentChannel as SpgPayrollPaymentChannel;
+
+  const batch = await prisma.$transaction(async (tx) => {
+    const created = await tx.spgPayrollBatch.create({
+      data: {
+        referenceNo: buildCounterSpgReferenceNo(),
+        employerPayerId: input.employerPayerId,
+        month: input.month,
+        year: input.year,
+        paymentChannel,
+        status: SpgPayrollBatchStatus.pending_payment,
+        currency: "MYR",
+        totalAmount,
+        rowCount: normalizedRows.length,
+        submittedAt: new Date(),
+      },
+    });
+
+    await tx.spgPayrollLine.createMany({
+      data: normalizedRows.map((row) => ({
+        batchId: created.id,
+        employeeName: row.employeeName,
+        employeeIdentityNo: row.employeeIdentityNo,
+        amount: row.amount,
+        isDuplicateInFile: inFileDupes.has(row.employeeIdentityNo),
+        isDuplicateInMonthBatch: existingSet.has(row.employeeIdentityNo),
+      })),
+    });
+
+    await tx.spgPayrollStatusHistory.create({
+      data: {
+        batchId: created.id,
+        oldStatus: null,
+        newStatus: SpgPayrollBatchStatus.pending_payment,
+        changedBy: actor.id,
+        reason: "Submitted via counter — waiting payment verification",
+      },
+    });
+
+    return created;
+  });
+
+  await writeAuditLog({
+    entityName: "spg_payroll_batch",
+    entityId: String(batch.id),
+    action: "CREATE",
+    newValueJson: {
+      referenceNo: batch.referenceNo,
+      employerPayerId: batch.employerPayerId,
+      rowCount: normalizedRows.length,
+      totalAmount,
+      paymentChannel: input.paymentChannel,
+      collectionPoint: input.collectionPoint,
+      source: "counter",
+    },
+    performedBy: actor.id,
+    ipAddress: req.ip,
+  });
+
+  return sendOk(res, {
+    batchId: batch.id,
+    referenceNo: batch.referenceNo,
+    totalAmount: Number(batch.totalAmount),
+    rowCount: batch.rowCount,
+    status: batch.status,
+  });
+});
 

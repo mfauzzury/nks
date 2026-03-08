@@ -17,6 +17,8 @@ import {
   Download,
   ReceiptText,
   Eye,
+  Pencil,
+  Check,
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
@@ -27,9 +29,13 @@ import {
   getPayerAudit,
   getPayerHistory,
   getPayerStats,
+  getPayerSpgLinkage,
+  listSpgEmployees,
+  updateSpgEmployee,
   removeFromBlacklist,
 } from "@/api/cms";
-import type { PayerProfile, PayerStatus } from "@/types";
+import type { SpgLinkageResult } from "@/api/cms";
+import type { PayerProfile, PayerStatus, SpgEmployee } from "@/types";
 
 const route = useRoute();
 const payer = ref<PayerProfile | null>(null);
@@ -63,6 +69,8 @@ type Transaction = PayerStats["recentTransactions"][number];
 
 const stats = ref<PayerStats | null>(null);
 const selectedYear = ref("all");
+const txPage = ref(1);
+const txLimit = ref(10);
 
 const yearOptions = [
   { value: "all", label: "Semua Tahun" },
@@ -205,6 +213,12 @@ const statusColor = computed(() => {
 });
 
 const currentStats = computed(() => stats.value || demoStatsByYear[selectedYear.value] || demoStatsByYear.all);
+const txTotal = computed(() => currentStats.value.recentTransactions.length);
+const txTotalPages = computed(() => Math.max(1, Math.ceil(txTotal.value / txLimit.value)));
+const pagedTransactions = computed(() => {
+  const start = (txPage.value - 1) * txLimit.value;
+  return currentStats.value.recentTransactions.slice(start, start + txLimit.value);
+});
 
 const individualPct = computed(() => {
   const t = currentStats.value.totalPaid;
@@ -232,6 +246,30 @@ function fmt(n: number) {
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("ms-MY", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const spgLinkage = ref<SpgLinkageResult["data"] | null>(null);
+const spgEmployees = ref<SpgEmployee[]>([]);
+const editingSpgEmployeeId = ref<number | null>(null);
+const editDeductionAmount = ref("");
+
+function startEditDeduction(employeeId: number, currentAmount: number | null) {
+  editingSpgEmployeeId.value = employeeId;
+  editDeductionAmount.value = currentAmount != null ? currentAmount.toFixed(2) : "";
+}
+
+function cancelEditDeduction() {
+  editingSpgEmployeeId.value = null;
+  editDeductionAmount.value = "";
+}
+
+async function saveDeductionAmount(employeeId: number) {
+  const val = Number(editDeductionAmount.value);
+  if (isNaN(val) || val < 0) return;
+  await updateSpgEmployee(employeeId, { deductionAmount: val });
+  editingSpgEmployeeId.value = null;
+  editDeductionAmount.value = "";
+  await load();
 }
 
 const selectedTx = ref<Transaction | null>(null);
@@ -321,6 +359,22 @@ async function load() {
   } catch {
     stats.value = null;
   }
+
+  try {
+    const spgRes = await getPayerSpgLinkage(payerId.value);
+    spgLinkage.value = spgRes.data;
+  } catch {
+    spgLinkage.value = null;
+  }
+
+  if (payer.value?.payerType === "majikan_spg") {
+    try {
+      const empRes = await listSpgEmployees(payerId.value);
+      spgEmployees.value = empRes.data;
+    } catch {
+      spgEmployees.value = [];
+    }
+  }
 }
 
 async function saveStatus() {
@@ -339,6 +393,7 @@ async function unblacklist() {
 }
 
 watch(selectedYear, async () => {
+  txPage.value = 1;
   try {
     const statsRes = await getPayerStats(payerId.value);
     stats.value = statsRes.data;
@@ -346,6 +401,16 @@ watch(selectedYear, async () => {
     stats.value = null;
   }
 });
+
+function prevTxPage() {
+  if (txPage.value <= 1) return;
+  txPage.value -= 1;
+}
+
+function nextTxPage() {
+  if (txPage.value >= txTotalPages.value) return;
+  txPage.value += 1;
+}
 
 onMounted(load);
 </script>
@@ -399,6 +464,95 @@ onMounted(load);
                 <div><span class="text-slate-400">Email:</span> <span class="font-medium text-slate-700">{{ payer.email || "-" }}</span></div>
                 <div><span class="text-slate-400">Telefon:</span> <span class="font-medium text-slate-700">{{ payer.phone || "-" }}</span></div>
               </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- SPG Linkage (Individual Payers) -->
+        <article v-if="spgLinkage && spgLinkage.type === 'individual' && spgLinkage.employees && spgLinkage.employees.length > 0" class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div class="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+            <Briefcase class="h-4 w-4 text-violet-500" />
+            <h3 class="text-sm font-semibold text-slate-900">Perjanjian Potongan Gaji (SPG)</h3>
+          </div>
+          <div class="p-6 space-y-4">
+            <div v-for="emp in spgLinkage.employees" :key="emp.id" class="rounded-lg border border-slate-100 p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-semibold text-slate-900">{{ emp.employerName }}</p>
+                  <p class="text-xs text-slate-500">{{ emp.employerPayerCode }}</p>
+                </div>
+                <span v-if="emp.employmentStatus" class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{{ emp.employmentStatus }}</span>
+              </div>
+              <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+                <div>
+                  <p class="text-xs text-slate-400">Amaun Potongan</p>
+                  <div class="mt-0.5 flex items-center gap-2">
+                    <template v-if="editingSpgEmployeeId === emp.id">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-slate-500">RM</span>
+                        <input
+                          v-model="editDeductionAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          class="w-28 rounded border border-violet-300 px-2 py-1 text-sm font-medium text-slate-900 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                          @keyup.enter="saveDeductionAmount(emp.id)"
+                          @keyup.escape="cancelEditDeduction"
+                        />
+                        <button class="rounded p-1 text-emerald-600 hover:bg-emerald-50" title="Simpan" @click="saveDeductionAmount(emp.id)">
+                          <Check class="h-3.5 w-3.5" />
+                        </button>
+                        <button class="rounded p-1 text-slate-400 hover:bg-slate-100" title="Batal" @click="cancelEditDeduction">
+                          <X class="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <span class="font-semibold text-slate-900">{{ emp.deductionAmount != null ? `RM ${emp.deductionAmount.toFixed(2)}` : '-' }}</span>
+                      <button class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-violet-600" title="Edit amaun potongan" @click="startEditDeduction(emp.id, emp.deductionAmount)">
+                        <Pencil class="h-3 w-3" />
+                      </button>
+                    </template>
+                  </div>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-400">No. Perjanjian</p>
+                  <p class="mt-0.5 font-medium text-slate-700">{{ emp.agreementNo || '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-400">Berkuatkuasa</p>
+                  <p class="mt-0.5 font-medium text-slate-700">{{ emp.agreementEffectiveDate ? fmtDate(emp.agreementEffectiveDate) : '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-400">Tarikh Tamat</p>
+                  <p class="mt-0.5 font-medium text-slate-700">{{ emp.agreementExpiryDate ? fmtDate(emp.agreementExpiryDate) : '-' }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payroll Deduction History -->
+            <div v-if="spgLinkage.payrollLines && spgLinkage.payrollLines.length > 0" class="mt-2">
+              <h4 class="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">Sejarah Potongan Gaji</h4>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-slate-100 text-left text-xs text-slate-500">
+                    <th class="pb-2 font-medium">Majikan</th>
+                    <th class="pb-2 font-medium">Tempoh</th>
+                    <th class="pb-2 font-medium">Rujukan</th>
+                    <th class="pb-2 text-right font-medium">Jumlah</th>
+                    <th class="pb-2 text-right font-medium">Tarikh Bayar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(line, idx) in spgLinkage.payrollLines.slice(0, 20)" :key="idx" class="border-b border-slate-50 last:border-0">
+                    <td class="py-2 text-slate-700">{{ line.employerName }}</td>
+                    <td class="py-2 text-slate-600">{{ ['', 'Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogo', 'Sep', 'Okt', 'Nov', 'Dis'][line.periodMonth] || line.periodMonth }} {{ line.periodYear }}</td>
+                    <td class="py-2 text-slate-500">{{ line.batchReferenceNo }}</td>
+                    <td class="py-2 text-right font-medium text-slate-900">RM {{ fmt(line.amount) }}</td>
+                    <td class="py-2 text-right text-slate-500">{{ line.paidAt ? fmtDate(line.paidAt) : '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </article>
@@ -563,7 +717,7 @@ onMounted(load);
                 </thead>
                 <tbody>
                   <tr
-                    v-for="tx in currentStats.recentTransactions"
+                    v-for="tx in pagedTransactions"
                     :key="tx.id"
                     class="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 transition-colors"
                     @click="openTxModal(tx)"
@@ -587,6 +741,14 @@ onMounted(load);
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div class="mt-2 flex items-center justify-between">
+              <p class="text-xs text-slate-500">Papar {{ txTotal === 0 ? 0 : (txPage - 1) * txLimit + 1 }}-{{ Math.min(txTotal, txPage * txLimit) }} daripada {{ txTotal }} rekod</p>
+              <div class="flex items-center gap-1.5">
+                <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="txPage <= 1" @click="prevTxPage">Previous</button>
+                <span class="px-2 text-xs text-slate-500">Page {{ txPage }} / {{ txTotalPages }}</span>
+                <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="txPage >= txTotalPages" @click="nextTxPage">Next</button>
+              </div>
             </div>
           </article>
         </div>
@@ -644,6 +806,81 @@ onMounted(load);
             </div>
           </article>
         </div>
+
+        <!-- SPG Employees (Employer Payers) -->
+        <article v-if="payer.payerType === 'majikan_spg' && spgEmployees.length > 0" class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div class="flex items-center gap-2">
+              <User class="h-4 w-4 text-violet-500" />
+              <h3 class="text-sm font-semibold text-slate-900">Senarai Pekerja SPG</h3>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{{ spgEmployees.length }}</span>
+            </div>
+            <router-link :to="`/spg/employers/${payer.id}/employees`" class="text-xs font-medium text-violet-600 hover:text-violet-800">
+              Urus Pekerja →
+            </router-link>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
+                  <th class="px-6 py-2.5 font-medium">#</th>
+                  <th class="px-3 py-2.5 font-medium">Nama</th>
+                  <th class="px-3 py-2.5 font-medium">No. IC</th>
+                  <th class="px-3 py-2.5 font-medium">Email</th>
+                  <th class="px-3 py-2.5 text-right font-medium">Perjanjian (RM)</th>
+                  <th class="px-3 py-2.5 font-medium">Status</th>
+                  <th class="px-3 py-2.5 w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(emp, idx) in spgEmployees" :key="emp.id" class="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                  <td class="px-6 py-2.5 text-xs text-slate-400">{{ idx + 1 }}</td>
+                  <td class="px-3 py-2.5 font-medium text-slate-900">{{ emp.employeeName }}</td>
+                  <td class="px-3 py-2.5 text-slate-600">{{ emp.employeeIdentityNo }}</td>
+                  <td class="px-3 py-2.5 text-slate-500">{{ emp.employeeEmail || '-' }}</td>
+                  <td class="px-3 py-2.5 text-right">
+                    <template v-if="editingSpgEmployeeId === emp.id">
+                      <div class="flex items-center justify-end gap-1.5">
+                        <input
+                          v-model="editDeductionAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          class="w-24 rounded border border-violet-300 px-2 py-1 text-right text-sm font-medium text-slate-900 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                          @keyup.enter="saveDeductionAmount(emp.id)"
+                          @keyup.escape="cancelEditDeduction"
+                        />
+                        <button class="rounded p-1 text-emerald-600 hover:bg-emerald-50" title="Simpan" @click="saveDeductionAmount(emp.id)">
+                          <Check class="h-3.5 w-3.5" />
+                        </button>
+                        <button class="rounded p-1 text-slate-400 hover:bg-slate-100" title="Batal" @click="cancelEditDeduction">
+                          <X class="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <span class="font-medium text-slate-900">{{ emp.deductionAmount != null ? Number(emp.deductionAmount).toFixed(2) : '-' }}</span>
+                    </template>
+                  </td>
+                  <td class="px-3 py-2.5">
+                    <span v-if="emp.employmentStatus" class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{{ emp.employmentStatus }}</span>
+                    <span v-else class="text-xs text-slate-300">-</span>
+                  </td>
+                  <td class="px-3 py-2.5">
+                    <button
+                      v-if="editingSpgEmployeeId !== emp.id"
+                      class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-violet-600"
+                      title="Edit amaun perjanjian"
+                      @click="startEditDeduction(emp.id, emp.deductionAmount ? Number(emp.deductionAmount) : null)"
+                    >
+                      <Pencil class="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
 
         <!-- Audit Log -->
         <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

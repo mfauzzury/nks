@@ -37,7 +37,7 @@ export function Hero() {
 
         <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg">
           <img
-            src="https://images.unsplash.com/photo-1609220136736-443140cffec6?auto=format&fit=crop&w=1400&q=80"
+            src="/images/malaysian-muslim-hero.jpg"
             alt="Keluarga Muslim bersama sebagai gambaran komuniti pembayar zakat"
             className="h-[320px] w-full object-cover md:h-[420px]"
           />

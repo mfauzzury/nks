@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   FileText,
@@ -14,10 +14,31 @@ import type { Page } from "@/types";
 
 const router = useRouter();
 const rows = ref<Page[]>([]);
+const page = ref(1);
+const limit = ref(20);
+const total = ref(0);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const fromRow = computed(() => (total.value === 0 ? 0 : (page.value - 1) * limit.value + 1));
+const toRow = computed(() => Math.min(total.value, page.value * limit.value));
 
 async function load() {
-  const response = await listPages("?page=1&limit=20");
+  const response = await listPages(`?page=${page.value}&limit=${limit.value}`);
   rows.value = response.data;
+  const meta = (response.meta || {}) as { total?: number };
+  total.value = Number(meta.total || 0);
+}
+
+async function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  await load();
+}
+
+async function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+  await load();
 }
 
 async function remove(id: number) {
@@ -106,6 +127,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Showing {{ fromRow }}-{{ toRow }} of {{ total }} pages</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

@@ -21,6 +21,8 @@ const form = ref({
   zakatType: "",
   financialYear: String(new Date().getFullYear()),
   amount: 0,
+  fidyahDays: 1,
+  fidyahYears: 1,
   paymentChannel: "COUNTER_CASH" as CounterPaymentChannel,
   collectionPoint: "Kaunter Utama",
   rrn: "",
@@ -31,6 +33,15 @@ const form = ref({
 });
 
 const showTerminalRef = computed(() => form.value.paymentChannel === "COUNTER_CARD_TERMINAL");
+const isFidyah = computed(() => form.value.zakatType.toLowerCase().includes("fidyah"));
+const calculatedAmount = computed(() => {
+  if (form.value.amount <= 0) return 0;
+  if (!isFidyah.value) return form.value.amount;
+  const days = Number(form.value.fidyahDays);
+  const years = Number(form.value.fidyahYears);
+  if (!Number.isFinite(days) || !Number.isFinite(years) || days <= 0 || years <= 0) return 0;
+  return form.value.amount * days * years;
+});
 
 const channelLabels: Record<string, string> = {
   COUNTER_CASH: "Tunai",
@@ -70,6 +81,12 @@ async function submitForm() {
   error.value = "";
   receipt.value = null;
   try {
+    if (isFidyah.value && (form.value.fidyahDays <= 0 || form.value.fidyahYears <= 0)) {
+      error.value = "Sila isi bilangan hari dan tahun gandaan fidyah.";
+      submitting.value = false;
+      return;
+    }
+
     const res = await createCounterPayment({
       guestName: form.value.guestName,
       identityNo: form.value.identityNo,
@@ -77,7 +94,7 @@ async function submitForm() {
       phone: form.value.phone || undefined,
       zakatType: form.value.zakatType,
       financialYear: form.value.financialYear,
-      amount: Number(form.value.amount),
+      amount: Number(calculatedAmount.value),
       paymentChannel: form.value.paymentChannel,
       collectionPoint: form.value.collectionPoint,
       terminalRef: showTerminalRef.value
@@ -160,9 +177,57 @@ onMounted(async () => {
               <option v-for="y in Array.from({ length: 11 }, (_, idx) => new Date().getFullYear() - idx)" :key="y" :value="String(y)">{{ y }}</option>
             </select>
           </div>
+          <template v-if="isFidyah">
+            <div>
+              <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Bilangan Hari Tinggal Puasa</label>
+              <div class="flex items-center rounded-lg border border-slate-300 bg-white">
+                <button
+                  type="button"
+                  class="px-3 py-2 text-base font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  @click="form.fidyahDays = Math.max(1, Number(form.fidyahDays || 1) - 1)"
+                >
+                  -
+                </button>
+                <input v-model.number="form.fidyahDays" min="1" max="365" type="number" class="stepper-input w-full border-0 bg-transparent px-2 py-2 text-center text-sm font-semibold text-slate-900 focus:outline-none" />
+                <button
+                  type="button"
+                  class="px-3 py-2 text-base font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  @click="form.fidyahDays = Math.min(365, Number(form.fidyahDays || 1) + 1)"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Tahun Gandaan</label>
+              <div class="flex items-center rounded-lg border border-slate-300 bg-white">
+                <button
+                  type="button"
+                  class="px-3 py-2 text-base font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  @click="form.fidyahYears = Math.max(1, Number(form.fidyahYears || 1) - 1)"
+                >
+                  -
+                </button>
+                <input v-model.number="form.fidyahYears" min="1" max="100" type="number" class="stepper-input w-full border-0 bg-transparent px-2 py-2 text-center text-sm font-semibold text-slate-900 focus:outline-none" />
+                <button
+                  type="button"
+                  class="px-3 py-2 text-base font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  @click="form.fidyahYears = Math.min(100, Number(form.fidyahYears || 1) + 1)"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </template>
           <div>
-            <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Jumlah (RM)</label>
+            <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+              {{ isFidyah ? "Kadar Fidyah (RM / hari)" : "Jumlah (RM)" }}
+            </label>
             <input v-model.number="form.amount" min="0.01" step="0.01" type="number" required class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+            <p v-if="isFidyah" class="mt-2 text-sm text-slate-600">
+              Formula: hari x tahun x kadar sehari. Jumlah bayaran:
+              <span class="ml-1 text-lg font-bold text-slate-900">RM {{ calculatedAmount.toFixed(2) }}</span>
+            </p>
           </div>
           <div>
             <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Kaedah Bayaran</label>
@@ -253,5 +318,18 @@ onMounted(async () => {
   body * { visibility: hidden; }
   #counter-receipt-print-area, #counter-receipt-print-area * { visibility: visible; }
   #counter-receipt-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+}
+</style>
+
+<style scoped>
+.stepper-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.stepper-input::-webkit-outer-spin-button,
+.stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 </style>

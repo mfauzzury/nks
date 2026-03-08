@@ -448,11 +448,490 @@ async function main() {
   ];
 
   function icNo(seed: number) {
-    return `90010${(seed % 9) + 1}${String((seed % 28) + 1).padStart(2, "0")}10${String(1000 + seed)}`;
+    // Standard MyKad test format: 12 digits (YYMMDDPP####)
+    return `90${String((seed % 12) + 1).padStart(2, "0")}${String((seed % 28) + 1).padStart(2, "0")}10${String((1000 + seed) % 10000).padStart(4, "0")}`;
   }
 
   function ssmNo(seed: number) {
     return `20${String(1200000 + seed)}`;
+  }
+
+  async function resolveUniquePayerCode(base: string) {
+    let candidate = base;
+    let suffix = 1;
+    while (true) {
+      const exists = await prisma.payerProfile.findUnique({
+        where: { payerCode: candidate },
+        select: { id: true },
+      });
+      if (!exists) return candidate;
+      candidate = `${base}-${suffix}`;
+      suffix += 1;
+    }
+  }
+
+  // Requested dataset (2026-03-06):
+  // 20 Malaysian individuals (mixed registered/non-registered states) + 10 companies.
+  const payerPortalPassword = process.env.SEED_PAYER_PASSWORD ?? "Payer12345!";
+  const payerPortalPasswordHash = await bcrypt.hash(payerPortalPassword, 12);
+
+  const requestedCompanies = [
+    "Suri Jaya Konsortium Sdn Bhd",
+    "Mekar Ihsan Dynamics Sdn Bhd",
+    "Teguh Murni Technologies Sdn Bhd",
+    "Wira Amanah Ventures Sdn Bhd",
+    "Bakti Cemerlang Holdings Sdn Bhd",
+    "Nusa Integriti Services Sdn Bhd",
+    "Mawar Pintar Resources Sdn Bhd",
+    "Rantau Ehsan Logistics Sdn Bhd",
+    "Aspirasi Rahmah Retail Sdn Bhd",
+    "Synergy Barakah Manufacturing Sdn Bhd",
+  ];
+
+  const requestedIndividuals = [
+    "Muhammad Ariff Hakim",
+    "Nurul Atiqah Binti Rahman",
+    "Syafiq Azman",
+    "Siti Hajar Binti Hamid",
+    "Aqil Danial",
+    "Nabilah Sofea",
+    "Hakim Zulkarnain",
+    "Aina Humairah",
+    "Faris Qayyum",
+    "Husna Irdina",
+    "Izzat Firdaus",
+    "Nurin Balqis",
+    "Aiman Syahmi",
+    "Raniah Nadiah",
+    "Danial Luqman",
+    "Amira Qistina",
+    "Khairul Fikri",
+    "Nur Afiqah",
+    "Faiz Harith",
+    "Sakinah Huda",
+  ];
+
+  const requestedSpgEmployerIds: number[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    const companyName = requestedCompanies[i];
+    const regNo = ssmNo(400 + i);
+    const companyEmail = `req-company-${i + 1}@contoh.my`;
+
+    const existingCorporate = await prisma.payerCorporate.findUnique({
+      where: { ssmNo: regNo },
+      include: { payer: true },
+    });
+
+    if (!existingCorporate) {
+      const payerCode = await resolveUniquePayerCode(`REQ-CORP-${String(i + 1).padStart(3, "0")}`);
+      await prisma.payerProfile.create({
+        data: {
+          payerCode,
+          payerType: "korporat",
+          displayName: companyName,
+          identityNo: regNo,
+          identityType: "ssm",
+          email: companyEmail,
+          phone: `03${String(73000000 + i * 13)}`,
+          status: "active",
+          corporate: {
+            create: {
+              companyName,
+              ssmNo: regNo,
+              companyType: "Sdn Bhd",
+              taxNo: `REQC${500000 + i}`,
+              taxBranch: "LHDN Petaling Jaya",
+            },
+          },
+        },
+      });
+    }
+
+    const existingSpg = await prisma.payerProfile.findFirst({
+      where: {
+        payerType: "majikan_spg",
+        identityNo: regNo,
+      },
+      include: { spgEmployer: true },
+    });
+
+    if (existingSpg) {
+      requestedSpgEmployerIds.push(existingSpg.id);
+      if (!existingSpg.spgEmployer) {
+        await prisma.spgEmployer.create({
+          data: {
+            payerId: existingSpg.id,
+            agreementNo: `REQ-SPG-${String(i + 1).padStart(3, "0")}`,
+            agreementEffectiveDate: new Date("2025-01-01"),
+            deductionMode: "fixed",
+            deductionValue: 120,
+            deductionCap: 600,
+          },
+        });
+      }
+    } else {
+      const payerCode = await resolveUniquePayerCode(`REQ-SPG-${String(i + 1).padStart(3, "0")}`);
+      const createdSpg = await prisma.payerProfile.create({
+        data: {
+          payerCode,
+          payerType: "majikan_spg",
+          displayName: companyName,
+          identityNo: regNo,
+          identityType: "other",
+          email: companyEmail,
+          phone: `03${String(83000000 + i * 17)}`,
+          status: "active",
+          spgEmployer: {
+            create: {
+              agreementNo: `REQ-SPG-${String(i + 1).padStart(3, "0")}`,
+              agreementEffectiveDate: new Date("2025-01-01"),
+              deductionMode: "fixed",
+              deductionValue: 120,
+              deductionCap: 600,
+            },
+          },
+        },
+      });
+      requestedSpgEmployerIds.push(createdSpg.id);
+    }
+  }
+
+  // Group A: 8 new registered users (no zakat transaction yet)
+  for (let i = 0; i < 8; i += 1) {
+    const fullName = requestedIndividuals[i];
+    const identity = icNo(3000 + i);
+    const existingIndividual = await prisma.payerIndividual.findUnique({
+      where: { mykadOrPassport: identity },
+      include: { payer: true },
+    });
+
+    if (!existingIndividual) {
+      const payerCode = await resolveUniquePayerCode(`REQ-IND-NEW-${String(i + 1).padStart(3, "0")}`);
+      await prisma.payerProfile.create({
+        data: {
+          payerCode,
+          payerType: "individu",
+          displayName: fullName,
+          identityNo: identity,
+          identityType: "mykad",
+          email: `req.new.${i + 1}@contoh.my`,
+          phone: `011100${String(100 + i)}`,
+          passwordHash: payerPortalPasswordHash,
+          status: "active",
+          individual: {
+            create: {
+              fullName,
+              mykadOrPassport: identity,
+              occupation: "Eksekutif",
+              incomeSource: "Gaji",
+              monthlyIncome: 3000 + i * 150,
+            },
+          },
+        },
+      });
+    } else if (!existingIndividual.payer.passwordHash) {
+      await prisma.payerProfile.update({
+        where: { id: existingIndividual.payerId },
+        data: { passwordHash: payerPortalPasswordHash },
+      });
+    }
+  }
+
+  // Few sample legacy profiles (inactive, identity variant) for merge simulation after new registration.
+  // These records intentionally do not create payerIndividual rows, so normal individual registration
+  // with normalized IC is still allowed.
+  const fewSampleLegacyProfiles = [
+    {
+      payerCode: "PYR-IND-LEG-900105-A",
+      displayName: "Legacy Individual 900105 A",
+      identityNo: "900105101900",
+      identityType: "passport" as const,
+      email: "legacy.900105.a@contoh.my",
+    },
+    {
+      payerCode: "PYR-IND-LEG-900105-B",
+      displayName: "Legacy Individual 900105 B",
+      identityNo: "900105101900",
+      identityType: "other" as const,
+      email: "legacy.900105.b@contoh.my",
+    },
+    {
+      payerCode: "PYR-IND-LEG-900105-C",
+      displayName: "Legacy Individual 900105 C",
+      identityNo: "900105-10-1900",
+      identityType: "passport" as const,
+      email: "legacy.900105.c@contoh.my",
+    },
+    {
+      payerCode: "PYR-IND-LEG-900105-D",
+      displayName: "Legacy Individual 900105 D",
+      identityNo: "900105-10-1900",
+      identityType: "other" as const,
+      email: "legacy.900105.d@contoh.my",
+    },
+    {
+      payerCode: "PYR-IND-LEG-900206-A",
+      displayName: "Legacy Individual 900206 A",
+      identityNo: "900206-10-1901",
+      identityType: "passport" as const,
+      email: "legacy.900206.a@contoh.my",
+    },
+  ];
+
+  for (const legacy of fewSampleLegacyProfiles) {
+    const existingByCode = await prisma.payerProfile.findUnique({
+      where: { payerCode: legacy.payerCode },
+    });
+    const existingByIdentity = await prisma.payerProfile.findFirst({
+      where: {
+        identityType: legacy.identityType,
+        identityNo: legacy.identityNo,
+      },
+      select: { id: true },
+    });
+    if (!existingByCode && !existingByIdentity) {
+      await prisma.payerProfile.create({
+        data: {
+          payerCode: legacy.payerCode,
+          payerType: "individu",
+          displayName: legacy.displayName,
+          identityNo: legacy.identityNo,
+          identityType: legacy.identityType,
+          email: legacy.email,
+          phone: "01100000000",
+          status: "inactive",
+        },
+      });
+    }
+  }
+
+  // Few sample legacy guest payments so reconciliation page has multiple records for demo.
+  const fewSampleGuestPayments = [
+    {
+      receiptNo: "SAMPLE-GUEST-900105-001",
+      guestName: "Muhammad Amir Hakim Bin Abdullah",
+      identityNo: "900105101900",
+      email: "sample.guest.900105.1@contoh.my",
+      amount: 45,
+      paymentMethod: "FPX | ZAKAT PENDAPATAN",
+    },
+    {
+      receiptNo: "SAMPLE-GUEST-900105-002",
+      guestName: "Muhammad Amir Hakim Bin Abdullah",
+      identityNo: "900105101900",
+      email: "sample.guest.900105.2@contoh.my",
+      amount: 60,
+      paymentMethod: "CARD | ZAKAT SIMPANAN",
+    },
+    {
+      receiptNo: "SAMPLE-GUEST-900206-001",
+      guestName: "Ahmad Firdaus Bin Abdullah",
+      identityNo: "900206101901",
+      email: "sample.guest.900206.1@contoh.my",
+      amount: 55,
+      paymentMethod: "JOMPAY | ZAKAT FITRAH",
+    },
+  ];
+
+  for (const gp of fewSampleGuestPayments) {
+    const existing = await prisma.guestPayment.findUnique({ where: { receiptNo: gp.receiptNo } });
+    if (!existing) {
+      await prisma.guestPayment.create({
+        data: {
+          receiptNo: gp.receiptNo,
+          guestName: gp.guestName,
+          identityNo: gp.identityNo,
+          email: gp.email,
+          amount: gp.amount,
+          paymentMethod: gp.paymentMethod,
+          status: "success",
+        },
+      });
+    }
+  }
+
+  // Group B: 6 registered users with existing zakat records (direct/guest payment history)
+  for (let i = 0; i < 6; i += 1) {
+    const idx = i + 8;
+    const fullName = requestedIndividuals[idx];
+    const identity = icNo(3100 + i);
+    const email = `req.registered.${i + 1}@contoh.my`;
+    const existingIndividual = await prisma.payerIndividual.findUnique({
+      where: { mykadOrPassport: identity },
+      include: { payer: true },
+    });
+
+    if (!existingIndividual) {
+      const payerCode = await resolveUniquePayerCode(`REQ-IND-REG-${String(i + 1).padStart(3, "0")}`);
+      await prisma.payerProfile.create({
+        data: {
+          payerCode,
+          payerType: "individu",
+          displayName: fullName,
+          identityNo: identity,
+          identityType: "mykad",
+          email,
+          phone: `011200${String(100 + i)}`,
+          passwordHash: payerPortalPasswordHash,
+          status: "active",
+          individual: {
+            create: {
+              fullName,
+              mykadOrPassport: identity,
+              occupation: "Penyelia",
+              incomeSource: "Gaji",
+              monthlyIncome: 4200 + i * 180,
+            },
+          },
+        },
+      });
+    } else if (!existingIndividual.payer.passwordHash) {
+      await prisma.payerProfile.update({
+        where: { id: existingIndividual.payerId },
+        data: { passwordHash: payerPortalPasswordHash },
+      });
+    }
+
+    const receiptNo = `REQ-GRCPT-REG-${String(i + 1).padStart(3, "0")}`;
+    const existingReceipt = await prisma.guestPayment.findUnique({
+      where: { receiptNo },
+    });
+    if (!existingReceipt) {
+      await prisma.guestPayment.create({
+        data: {
+          receiptNo,
+          guestName: fullName,
+          identityNo: identity,
+          email,
+          amount: 100 + i * 20,
+          paymentMethod: "FPX | ZAKAT PENDAPATAN",
+          status: "success",
+        },
+      });
+    }
+  }
+
+  // Group D: 10 SPG test employees under FIRST employer for CSV upload testing
+  {
+    const testEmployerPayerId = requestedSpgEmployerIds[0];
+    const testEmployees = [
+      { seed: 3300, name: "Fatimah Zahra", deduction: 120 },
+      { seed: 3301, name: "Ibrahim Ismail", deduction: 150 },
+      { seed: 3302, name: "Zainab Ahmad", deduction: 180 },
+      { seed: 3303, name: "Khadijah Noor", deduction: 135 },
+      { seed: 3304, name: "Hassan Basri", deduction: 200 },
+      { seed: 3305, name: "Maryam Safiya", deduction: 145 },
+      { seed: 3306, name: "Muhammad Ali", deduction: 160 },
+      { seed: 3307, name: "Ahmad Firdaus", deduction: 175 },
+      { seed: 3308, name: "Mohd Syafiq", deduction: 190 },
+      { seed: 3309, name: "Nur Aisyah", deduction: 210 },
+    ];
+    for (const te of testEmployees) {
+      const identity = icNo(te.seed);
+      const existing = await prisma.spgEmployee.findFirst({
+        where: { employerPayerId: testEmployerPayerId, employeeIdentityNo: identity },
+      });
+      if (!existing) {
+        await prisma.spgEmployee.create({
+          data: {
+            employerPayerId: testEmployerPayerId,
+            employeeIdentityNo: identity,
+            employeeName: te.name,
+            employeeEmail: `test.spg.${te.seed}@contoh.my`,
+            employeePhone: `011400${String(te.seed % 1000)}`,
+            deductionAmount: te.deduction,
+            employmentStatus: "AKTIF",
+          },
+        });
+      }
+    }
+  }
+
+  // Group C: 6 non-registered users but zakat exists via SPG payroll (employee deduction)
+  for (let i = 0; i < 6; i += 1) {
+    const idx = i + 14;
+    const fullName = requestedIndividuals[idx];
+    const identity = icNo(3200 + i);
+    const employerPayerId = requestedSpgEmployerIds[i % requestedSpgEmployerIds.length];
+
+    const existingStaff = await prisma.spgEmployee.findFirst({
+      where: {
+        employerPayerId,
+        employeeIdentityNo: identity,
+      },
+    });
+    if (!existingStaff) {
+      await prisma.spgEmployee.create({
+        data: {
+          employerPayerId,
+          employeeIdentityNo: identity,
+          employeeName: fullName,
+          employeeEmail: `req.nonreg.${i + 1}@contoh.my`,
+          employeePhone: `011300${String(100 + i)}`,
+          deductionAmount: 140 + i * 10,
+          employmentStatus: "AKTIF",
+        },
+      });
+    }
+
+    const batchRef = `REQ-SPG-BATCH-2026-0${(i % 3) + 1}`;
+    const month = (i % 3) + 1;
+    const year = 2026;
+    let batch = await prisma.spgPayrollBatch.findUnique({
+      where: { referenceNo: batchRef },
+    });
+
+    if (!batch) {
+      batch = await prisma.spgPayrollBatch.create({
+        data: {
+          referenceNo: batchRef,
+          employerPayerId,
+          month,
+          year,
+          paymentChannel: "FPX_B2B",
+          status: "paid_success",
+          currency: "MYR",
+          totalAmount: 0,
+          rowCount: 0,
+          submittedAt: new Date("2026-01-15"),
+          paidAt: new Date("2026-01-16"),
+        },
+      });
+    }
+
+    const existingLine = await prisma.spgPayrollLine.findFirst({
+      where: {
+        batchId: batch.id,
+        employeeIdentityNo: identity,
+      },
+    });
+
+    if (!existingLine) {
+      await prisma.spgPayrollLine.create({
+        data: {
+          batchId: batch.id,
+          employeeName: fullName,
+          employeeIdentityNo: identity,
+          amount: 140 + i * 10,
+          isDuplicateInFile: false,
+          isDuplicateInMonthBatch: false,
+        },
+      });
+
+      const aggregates = await prisma.spgPayrollLine.aggregate({
+        where: { batchId: batch.id },
+        _sum: { amount: true },
+        _count: { id: true },
+      });
+
+      await prisma.spgPayrollBatch.update({
+        where: { id: batch.id },
+        data: {
+          totalAmount: aggregates._sum.amount ?? 0,
+          rowCount: aggregates._count.id,
+        },
+      });
+    }
   }
 
   // Seed 20 Malaysian Muslim individual payers (registered)
@@ -468,9 +947,10 @@ async function main() {
     });
 
     if (!existingIndividual) {
+      const payerCode = await resolveUniquePayerCode(`PYR-IND-${String(i + 1).padStart(3, "0")}`);
       await prisma.payerProfile.create({
         data: {
-          payerCode: `PYR-IND-${String(i + 1).padStart(3, "0")}`,
+          payerCode,
           payerType: "individu",
           displayName: fullName,
           identityNo: identity,
@@ -510,6 +990,24 @@ async function main() {
   for (let i = 0; i < 20; i += 1) {
     const identity = icNo(i + 1);
     const receiptNo = `GRCPT-SEED-REG-${String(i + 1).padStart(3, "0")}`;
+    const existingReceipt = await prisma.guestPayment.findUnique({
+      where: { receiptNo },
+    });
+    if (existingReceipt) continue;
+
+    const existingGuest = await prisma.guestPayment.findFirst({
+      where: {
+        identityNo: identity,
+        status: "success",
+      },
+    });
+    if (existingGuest) continue;
+
+    const zakatType = seedZakatTypes[i % seedZakatTypes.length];
+    const payMethod = seedPayMethods[i % seedPayMethods.length];
+
+    await prisma.guestPayment.create({
+      data: {
     const zakatType = seedZakatTypes[i % seedZakatTypes.length];
     const payMethod = seedPayMethods[i % seedPayMethods.length];
 
@@ -566,9 +1064,10 @@ async function main() {
     if (existingCorporate) {
       payerId = existingCorporate.payerId;
     } else {
+      const payerCode = await resolveUniquePayerCode(`PYR-CORP-${String(i + 1).padStart(3, "0")}`);
       const created = await prisma.payerProfile.create({
         data: {
-          payerCode: `PYR-CORP-${String(i + 1).padStart(3, "0")}`,
+          payerCode,
           payerType: "korporat",
           displayName: companyName,
           identityNo: regNo,
@@ -650,9 +1149,10 @@ async function main() {
     if (existingCorporate) {
       corporatePayerId = existingCorporate.payerId;
     } else {
+      const payerCode = await resolveUniquePayerCode(`PYR-CORP-BOTH-${String(i + 1).padStart(3, "0")}`);
       const createdCorporate = await prisma.payerProfile.create({
         data: {
-          payerCode: `PYR-CORP-BOTH-${String(i + 1).padStart(3, "0")}`,
+          payerCode,
           payerType: "korporat",
           displayName: companyName,
           identityNo: regNo,
@@ -700,9 +1200,10 @@ async function main() {
         });
       }
     } else {
+      const payerCode = await resolveUniquePayerCode(`PYR-SPG-BOTH-${String(i + 1).padStart(3, "0")}`);
       const createdSpg = await prisma.payerProfile.create({
         data: {
-          payerCode: `PYR-SPG-BOTH-${String(i + 1).padStart(3, "0")}`,
+          payerCode,
           payerType: "majikan_spg",
           displayName: companyName,
           identityNo: regNo,
@@ -776,9 +1277,10 @@ async function main() {
     });
     if (existingCorporate) continue;
 
+    const payerCode = await resolveUniquePayerCode(`PYR-CORP-ONLY-${String(i + 1).padStart(3, "0")}`);
     await prisma.payerProfile.create({
       data: {
-        payerCode: `PYR-CORP-ONLY-${String(i + 1).padStart(3, "0")}`,
+        payerCode,
         payerType: "korporat",
         displayName: companyName,
         identityNo: regNo,
@@ -815,9 +1317,10 @@ async function main() {
     if (existingSpg) {
       spgPayerId = existingSpg.id;
     } else {
+      const payerCode = await resolveUniquePayerCode(`PYR-SPG-ONLY-${String(i + 1).padStart(3, "0")}`);
       const createdSpg = await prisma.payerProfile.create({
         data: {
-          payerCode: `PYR-SPG-ONLY-${String(i + 1).padStart(3, "0")}`,
+          payerCode,
           payerType: "majikan_spg",
           displayName: companyName,
           identityNo: regNo,

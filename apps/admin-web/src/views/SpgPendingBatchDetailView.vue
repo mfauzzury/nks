@@ -19,8 +19,17 @@ const row = ref<SpgPayrollBatchDetail | null>(null);
 const reason = ref("");
 const error = ref("");
 const message = ref("");
+const linesPage = ref(1);
+const linesLimit = ref(20);
 
 const batchId = computed(() => Number(route.params.batchId));
+const totalLines = computed(() => row.value?.lines.length || 0);
+const linesTotalPages = computed(() => Math.max(1, Math.ceil(totalLines.value / linesLimit.value)));
+const pagedLines = computed(() => {
+  const lines = row.value?.lines || [];
+  const start = (linesPage.value - 1) * linesLimit.value;
+  return lines.slice(start, start + linesLimit.value);
+});
 
 function fmtCurrency(value: string | number) {
   const amount = Number(value || 0);
@@ -34,11 +43,22 @@ async function load() {
   try {
     const res = await getSpgPayrollBatchDetail(batchId.value);
     row.value = res.data;
+    if (linesPage.value > linesTotalPages.value) linesPage.value = linesTotalPages.value;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Gagal memuatkan butiran batch";
   } finally {
     loading.value = false;
   }
+}
+
+function prevLinesPage() {
+  if (linesPage.value <= 1) return;
+  linesPage.value -= 1;
+}
+
+function nextLinesPage() {
+  if (linesPage.value >= linesTotalPages.value) return;
+  linesPage.value += 1;
 }
 
 async function approve() {
@@ -165,8 +185,8 @@ onMounted(load);
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="(line, idx) in row?.lines || []" :key="line.id" class="transition-colors hover:bg-slate-50">
-                <td class="px-4 py-2 text-slate-600">{{ idx + 1 }}</td>
+              <tr v-for="(line, idx) in pagedLines" :key="line.id" class="transition-colors hover:bg-slate-50">
+                <td class="px-4 py-2 text-slate-600">{{ (linesPage - 1) * linesLimit + idx + 1 }}</td>
                 <td class="px-4 py-2 text-slate-800">{{ line.employeeName }}</td>
                 <td class="px-4 py-2 text-slate-600">{{ line.employeeIdentityNo }}</td>
                 <td class="px-4 py-2 text-right font-semibold text-slate-900">{{ fmtCurrency(line.amount) }}</td>
@@ -189,6 +209,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Papar {{ totalLines === 0 ? 0 : (linesPage - 1) * linesLimit + 1 }}-{{ Math.min(totalLines, linesPage * linesLimit) }} daripada {{ totalLines }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="linesPage <= 1" @click="prevLinesPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ linesPage }} / {{ linesTotalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="linesPage >= linesTotalPages" @click="nextLinesPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

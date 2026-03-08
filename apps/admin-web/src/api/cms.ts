@@ -10,6 +10,7 @@ import type {
   CounterPaymentChannel,
   CounterPaymentRow,
   CounterReconStatus,
+  DatabaseSchemaPayload,
   DuplicateCase,
   IndividualPayerInput,
   IndividualDirectoryCategory,
@@ -47,6 +48,10 @@ export async function fetchDashboardSummary() {
   return apiRequest<{ data: { counts: { posts: number; pages: number; media: number }; recent: { posts: Post[]; pages: Page[] } } }>(
     "/api/dashboard/summary",
   );
+}
+
+export async function getDatabaseSchema() {
+  return apiRequest<{ data: DatabaseSchemaPayload }>("/api/development/database-schema");
 }
 
 export async function listPosts(params = "") {
@@ -288,7 +293,7 @@ export async function listPendingSpgPayrollBatches() {
 }
 
 export async function getSpgPayrollBatchDetail(batchId: number) {
-  return apiRequest<{ data: SpgPayrollBatchDetail }>(`/api/spg/batches/${batchId}`);
+  return apiRequest<{ data: SpgPayrollBatchDetail }>(`/api/spg/admin/batches/${batchId}`);
 }
 
 export async function approveSpgPayrollBatch(batchId: number, reason?: string) {
@@ -312,9 +317,13 @@ export async function rejectSpgPayrollBatch(batchId: number, reason?: string) {
 }
 
 // Duplicates + merges
-export async function listDuplicateCases(status?: string) {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest<{ data: DuplicateCase[]; meta: Record<string, unknown> }>(`/api/duplicates/cases${qs}`);
+export async function listDuplicateCases(params?: { status?: string; page?: number; limit?: number }) {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.limit) qs.set("limit", String(params.limit));
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+  return apiRequest<{ data: DuplicateCase[]; meta: Record<string, unknown> }>(`/api/duplicates/cases${suffix}`);
 }
 
 export async function getDuplicateCase(id: number) {
@@ -340,6 +349,27 @@ export async function executeMerge(input: MergeExecuteInput) {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function getGuestPaymentsByIdentity(identityNo: string) {
+  return apiRequest<{
+    data: {
+      identityNo: string;
+      totalTransactions: number;
+      totalAmount: number;
+      latestPaidAt: string | null;
+      transactions: Array<{
+        id: number;
+        receiptNo: string;
+        guestName: string;
+        identityNo: string;
+        amount: string;
+        paymentMethod: string;
+        status: string;
+        paidAt: string;
+      }>;
+    };
+  }>(`/api/guest-payments/by-identity/${encodeURIComponent(identityNo)}`);
 }
 
 // Status + audit
@@ -388,6 +418,36 @@ export async function getPayerStats(payerId: number) {
       }>;
     };
   }>(`/api/payers/${payerId}/stats`);
+}
+
+export type SpgLinkageResult = {
+  data: {
+    type: "individual" | "none";
+    employees?: Array<{
+      id: number;
+      employeeName: string;
+      employeeIdentityNo: string;
+      deductionAmount: number | null;
+      employmentStatus: string | null;
+      employerName: string;
+      employerPayerCode: string;
+      agreementNo: string | null;
+      agreementEffectiveDate: string | null;
+      agreementExpiryDate: string | null;
+    }>;
+    payrollLines?: Array<{
+      batchReferenceNo: string;
+      periodMonth: number;
+      periodYear: number;
+      amount: number;
+      paidAt: string | null;
+      employerName: string;
+    }>;
+  };
+};
+
+export async function getPayerSpgLinkage(payerId: number) {
+  return apiRequest<SpgLinkageResult>(`/api/payers/${payerId}/spg-linkage`);
 }
 
 // Zakat Configuration
@@ -615,5 +675,191 @@ export async function quickRegisterPayer(input: {
       phone: input.phone || undefined,
       password: input.password || undefined,
     }),
+  });
+}
+
+export async function lookupPayerBySsm(ssmNo: string) {
+  return apiRequest<{
+    data: {
+      id: number;
+      payerCode: string;
+      displayName: string;
+      identityNo: string;
+      email: string | null;
+      phone: string | null;
+      payerType: string;
+      corporate: { companyName: string; ssmNo: string; companyType: string | null } | null;
+      contactPersons: Array<{ name: string; position: string | null; email: string | null; phone: string | null }>;
+    };
+  }>(`/api/payers/portal-profile/corporate/${encodeURIComponent(ssmNo)}`);
+}
+
+export async function quickRegisterCorporate(input: {
+  companyName: string;
+  ssmNo: string;
+  representativeName?: string;
+  email?: string;
+  phone?: string;
+}) {
+  return apiRequest<{ data: PayerProfile }>("/api/payers/corporate", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: input.companyName,
+      companyName: input.companyName,
+      ssmNo: input.ssmNo,
+      identityNo: input.ssmNo,
+      representativeName: input.representativeName || undefined,
+      email: input.email || undefined,
+      phone: input.phone || undefined,
+    }),
+  });
+}
+
+export async function createCounterScheduledPayment(input: {
+  payerName: string;
+  identityNo: string;
+  email?: string;
+  zakatType: string;
+  financialYear: string;
+  amountPerInstalment: number;
+  totalInstalments: number;
+  frequency: "monthly" | "quarterly" | "yearly";
+  cardLast4: string;
+  cardBrand: "VISA" | "MASTERCARD";
+  collectionPoint: string;
+}) {
+  return apiRequest<{
+    data: {
+      id: number;
+      scheduleRef: string;
+      status: string;
+      totalInstalments: number;
+      completedInstalments: number;
+      amountPerInstalment: string;
+      frequency: string;
+      nextChargeDate: string;
+      firstPayment: { id: number; receiptNo: string };
+    };
+  }>("/api/scheduled-payments", {
+    method: "POST",
+    body: JSON.stringify({ ...input, source: "COUNTER_COLLECTION" }),
+  });
+}
+
+// Scheduled payments admin
+export async function listScheduledPayments(params: { page?: number; limit?: number; status?: string; q?: string }) {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.status) qs.set("status", params.status);
+  if (params.q) qs.set("q", params.q);
+  return apiRequest<{
+    data: Array<{
+      id: number;
+      scheduleRef: string;
+      payerName: string;
+      identityNo: string;
+      zakatType: string;
+      amountPerInstalment: string;
+      totalInstalments: number;
+      completedInstalments: number;
+      frequency: string;
+      cardBrand: string;
+      cardLast4: string;
+      source: string;
+      status: string;
+      nextChargeDate: string;
+      createdAt: string;
+    }>;
+    meta: { total: number; page: number; limit: number };
+  }>(`/api/scheduled-payments?${qs.toString()}`);
+}
+
+export async function getScheduledPaymentDetail(id: number) {
+  return apiRequest<{
+    data: {
+      id: number;
+      scheduleRef: string;
+      payerName: string;
+      identityNo: string;
+      email: string | null;
+      zakatType: string;
+      financialYear: string;
+      amountPerInstalment: string;
+      totalInstalments: number;
+      completedInstalments: number;
+      frequency: string;
+      cardBrand: string;
+      cardLast4: string;
+      source: string;
+      collectionPoint: string | null;
+      nextChargeDate: string;
+      status: string;
+      pausedReason: string | null;
+      cancelledReason: string | null;
+      createdAt: string;
+      executions: Array<{
+        id: number;
+        instalmentNo: number;
+        amount: string;
+        chargedAt: string;
+        status: string;
+        failureReason: string | null;
+        receiptNo: string | null;
+        paidAt: string | null;
+      }>;
+    };
+  }>(`/api/scheduled-payments/${id}`);
+}
+
+export async function pauseScheduledPayment(id: number, reason?: string) {
+  return apiRequest<{ data: { id: number; status: string } }>(`/api/scheduled-payments/${id}/pause`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function resumeScheduledPayment(id: number) {
+  return apiRequest<{ data: { id: number; status: string } }>(`/api/scheduled-payments/${id}/resume`, {
+    method: "POST",
+  });
+}
+
+export async function cancelScheduledPayment(id: number, reason?: string) {
+  return apiRequest<{ data: { id: number; status: string } }>(`/api/scheduled-payments/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function processDueScheduledPayments() {
+  return apiRequest<{
+    data: {
+      processedCount: number;
+      results: Array<{ scheduleRef: string; instalmentNo: number; receiptNo: string; status: string }>;
+    };
+  }>("/api/scheduled-payments/process-due", { method: "POST" });
+}
+
+export async function createCounterSpgBatch(input: {
+  employerPayerId: number;
+  month: number;
+  year: number;
+  paymentChannel: "COUNTER_CASH" | "CHEQUE" | "FPX_B2B" | "CARD";
+  collectionPoint: string;
+  rows: Array<{ employeeName: string; employeeIdentityNo: string; amount: number }>;
+  notes?: string;
+}) {
+  return apiRequest<{
+    data: {
+      batchId: number;
+      referenceNo: string;
+      totalAmount: number;
+      rowCount: number;
+      status: string;
+    };
+  }>("/api/counter/spg-batch", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }

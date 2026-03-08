@@ -18,10 +18,12 @@ import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Button } from "@/components/ui/button";
 
 const CHANNELS = [
-  { code: "FPX_B2B", label: "FPX B2B" },
-  { code: "CARD", label: "Kad Kredit" },
+  { code: "SLIP_BANK", label: "Slip Bank" },
+  { code: "FPX", label: "FPX B2C/B2B" },
+  { code: "JOMPAY", label: "JomPAY" },
+  { code: "CARD", label: "Debit/Credit Card" },
   { code: "CHEQUE", label: "Cek" },
-  { code: "COUNTER_CASH", label: "Kaunter Tunai" },
+  { code: "CASH", label: "Tunai" },
 ] as const;
 
 const MONTHS = [
@@ -202,7 +204,7 @@ export default function CorporateSpgDashboardPage() {
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 portal-focus"
+                className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-sm text-slate-700 portal-focus"
               >
                 <option value="">Semua Tahun</option>
                 {yearOptions.map((y) => (
@@ -212,7 +214,7 @@ export default function CorporateSpgDashboardPage() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 portal-focus"
+                className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-sm text-slate-700 portal-focus"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>

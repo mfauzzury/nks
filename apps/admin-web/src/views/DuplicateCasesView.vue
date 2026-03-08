@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { listDuplicateCases } from "@/api/cms";
@@ -7,10 +7,36 @@ import type { DuplicateCase, DuplicateCaseStatus } from "@/types";
 
 const rows = ref<DuplicateCase[]>([]);
 const status = ref<DuplicateCaseStatus | "">("");
+const page = ref(1);
+const limit = ref(20);
+const total = ref(0);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const fromRow = computed(() => (total.value === 0 ? 0 : (page.value - 1) * limit.value + 1));
+const toRow = computed(() => Math.min(total.value, page.value * limit.value));
 
 async function load() {
-  const res = await listDuplicateCases(status.value || undefined);
+  const res = await listDuplicateCases({ status: status.value || undefined, page: page.value, limit: limit.value });
   rows.value = res.data;
+  const meta = (res.meta || {}) as { total?: number };
+  total.value = Number(meta.total || 0);
+}
+
+async function search() {
+  page.value = 1;
+  await load();
+}
+
+async function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  await load();
+}
+
+async function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+  await load();
 }
 
 onMounted(load);
@@ -19,7 +45,15 @@ onMounted(load);
 <template>
   <AdminLayout>
     <div class="w-full space-y-4">
-      <h1 class="page-title">Senarai Potensi Pendua (SPG vs Individu)</h1>
+      <div class="flex items-center justify-between gap-2">
+        <h1 class="page-title">Senarai Potensi Pendua (SPG vs Individu)</h1>
+        <router-link
+          to="/reconciliation/account-merge"
+          class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Account Merge Page
+        </router-link>
+      </div>
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div class="flex gap-2">
           <select v-model="status" class="rounded border border-slate-300 px-3 py-2 text-sm">
@@ -29,7 +63,7 @@ onMounted(load);
             <option value="merged">merged</option>
             <option value="rejected">rejected</option>
           </select>
-          <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white" @click="load">Tapis</button>
+          <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white" @click="search">Tapis</button>
         </div>
       </div>
       <article class="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -58,6 +92,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Papar {{ fromRow }}-{{ toRow }} daripada {{ total }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

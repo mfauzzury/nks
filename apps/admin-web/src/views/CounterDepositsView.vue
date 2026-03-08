@@ -22,10 +22,14 @@ const slipFile = ref<File | null>(null);
 const availablePayments = ref<CounterPaymentRow[]>([]);
 const selectedPaymentIds = ref<number[]>([]);
 const declaredAmount = ref<number>(0);
+const paymentPage = ref(1);
+const paymentLimit = ref(20);
 
 const batches = ref<CounterDepositBatchRow[]>([]);
 const detailLoading = ref(false);
 const selectedBatch = ref<CounterDepositBatchDetail | null>(null);
+const batchPage = ref(1);
+const batchLimit = ref(20);
 
 const expectedChannel = computed(() => (type.value === "CASH_BANKIN" ? "COUNTER_CASH" : "COUNTER_CARD_TERMINAL"));
 const systemAmount = computed(() => {
@@ -36,6 +40,18 @@ const systemAmount = computed(() => {
 });
 
 const variance = computed(() => Math.round((Number(declaredAmount.value || 0) - systemAmount.value) * 100) / 100);
+const paymentTotal = computed(() => availablePayments.value.length);
+const paymentTotalPages = computed(() => Math.max(1, Math.ceil(paymentTotal.value / paymentLimit.value)));
+const pagedAvailablePayments = computed(() => {
+  const start = (paymentPage.value - 1) * paymentLimit.value;
+  return availablePayments.value.slice(start, start + paymentLimit.value);
+});
+const batchTotal = computed(() => batches.value.length);
+const batchTotalPages = computed(() => Math.max(1, Math.ceil(batchTotal.value / batchLimit.value)));
+const pagedBatches = computed(() => {
+  const start = (batchPage.value - 1) * batchLimit.value;
+  return batches.value.slice(start, start + batchLimit.value);
+});
 
 function fmtCurrency(value: number) {
   return new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(Number(value || 0));
@@ -66,11 +82,13 @@ async function loadPayments() {
     channel: expectedChannel.value,
   });
   availablePayments.value = res.data || [];
+  if (paymentPage.value > paymentTotalPages.value) paymentPage.value = paymentTotalPages.value;
 }
 
 async function loadBatches() {
   const res = await listCounterDeposits({ page: 1, limit: 100 });
   batches.value = res.data || [];
+  if (batchPage.value > batchTotalPages.value) batchPage.value = batchTotalPages.value;
 }
 
 async function submitBatch() {
@@ -141,6 +159,26 @@ onMounted(async () => {
     loading.value = false;
   }
 });
+
+function prevPaymentPage() {
+  if (paymentPage.value <= 1) return;
+  paymentPage.value -= 1;
+}
+
+function nextPaymentPage() {
+  if (paymentPage.value >= paymentTotalPages.value) return;
+  paymentPage.value += 1;
+}
+
+function prevBatchPage() {
+  if (batchPage.value <= 1) return;
+  batchPage.value -= 1;
+}
+
+function nextBatchPage() {
+  if (batchPage.value >= batchTotalPages.value) return;
+  batchPage.value += 1;
+}
 </script>
 
 <template>
@@ -184,7 +222,7 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="p in availablePayments" :key="p.id" class="transition-colors hover:bg-slate-50">
+              <tr v-for="p in pagedAvailablePayments" :key="p.id" class="transition-colors hover:bg-slate-50">
                 <td class="px-3 py-2"><input type="checkbox" :checked="selectedPaymentIds.includes(p.id)" @change="toggleSelection(p.id)" /></td>
                 <td class="px-3 py-2 font-medium text-slate-800">{{ p.receiptNo }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ fmtDate(p.paidAt) }}</td>
@@ -196,6 +234,14 @@ onMounted(async () => {
               <tr v-if="!loading && availablePayments.length === 0"><td colspan="6" class="px-3 py-5 text-center text-slate-400">Tiada transaksi unbatched untuk channel ini.</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="mt-2 flex items-center justify-between">
+          <p class="text-xs text-slate-500">Papar {{ paymentTotal === 0 ? 0 : (paymentPage - 1) * paymentLimit + 1 }}-{{ Math.min(paymentTotal, paymentPage * paymentLimit) }} daripada {{ paymentTotal }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="paymentPage <= 1" @click="prevPaymentPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ paymentPage }} / {{ paymentTotalPages }}</span>
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="paymentPage >= paymentTotalPages" @click="nextPaymentPage">Next</button>
+          </div>
         </div>
 
         <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -250,7 +296,7 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="b in batches" :key="b.id" class="transition-colors hover:bg-slate-50">
+              <tr v-for="b in pagedBatches" :key="b.id" class="transition-colors hover:bg-slate-50">
                 <td class="px-3 py-2 font-medium text-slate-800">{{ b.referenceNo }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ b.depositType }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ fmtDate(b.depositDate) }}</td>
@@ -267,6 +313,14 @@ onMounted(async () => {
               <tr v-if="batches.length === 0"><td colspan="7" class="px-3 py-5 text-center text-slate-400">Tiada batch.</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="mt-2 flex items-center justify-between px-4 pb-3">
+          <p class="text-xs text-slate-500">Papar {{ batchTotal === 0 ? 0 : (batchPage - 1) * batchLimit + 1 }}-{{ Math.min(batchTotal, batchPage * batchLimit) }} daripada {{ batchTotal }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="batchPage <= 1" @click="prevBatchPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ batchPage }} / {{ batchTotalPages }}</span>
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="batchPage >= batchTotalPages" @click="nextBatchPage">Next</button>
+          </div>
         </div>
       </article>
 
