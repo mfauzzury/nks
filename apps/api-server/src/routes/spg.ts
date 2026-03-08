@@ -27,6 +27,7 @@ type PreviewRow = {
   employeeIdentityNo: string;
   amount: number | null;
   errors: string[];
+  agreedAmount: number | null;
   duplicateInFile: boolean;
   duplicateInMonthBatch: boolean;
 };
@@ -162,6 +163,21 @@ async function annotatePreviewRows(input: Array<{
       })
     : [];
   const existingSet = new Set(existing.map((x) => normalizeIdentity(x.employeeIdentityNo)));
+
+  // Lookup agreed deduction amounts from SpgEmployee records
+  const agreedRecords = normalizedIds.length
+    ? await prisma.spgEmployee.findMany({
+        where: { employerPayerId, employeeIdentityNo: { in: normalizedIds } },
+        select: { employeeIdentityNo: true, deductionAmount: true },
+      })
+    : [];
+  const agreedMap = new Map<string, number>();
+  for (const emp of agreedRecords) {
+    if (emp.deductionAmount != null) {
+      agreedMap.set(normalizeIdentity(emp.employeeIdentityNo), Number(emp.deductionAmount));
+    }
+  }
+
   const inFileCount = new Map<string, number>();
   for (const row of input) {
     if (!row.employeeIdentityNo) continue;
@@ -187,12 +203,19 @@ async function annotatePreviewRows(input: Array<{
     const duplicateInFile = key.length > 0 && (inFileCount.get(key) || 0) > 1;
     const duplicateInMonthBatch = key.length > 0 && existingSet.has(key);
 
+    // Check against agreed deduction amount
+    const agreed = agreedMap.get(key) ?? null;
+    if (agreed !== null && Number.isFinite(amount) && amount !== agreed) {
+      errors.push(`Amaun tidak sepadan dengan perjanjian (RM ${agreed.toFixed(2)})`);
+    }
+
     return {
       rowNo: row.rowNo,
       employeeName: row.employeeName,
       employeeIdentityNo: key,
       amount: Number.isFinite(amount) ? amount : null,
       errors,
+      agreedAmount: agreed,
       duplicateInFile,
       duplicateInMonthBatch,
     };
@@ -202,8 +225,9 @@ async function annotatePreviewRows(input: Array<{
 }
 
 function buildBatchReferenceNo() {
-  const rand = Math.floor(Math.random() * 900000) + 100000;
-  return `SPG-${Date.now()}-${rand}`;
+  const timePart = Date.now().toString(36).toUpperCase();
+  const randPart = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `SPG-${timePart}-${randPart}`;
 }
 
 function buildSpgReceiptNo() {
@@ -281,6 +305,44 @@ spgRouter.post("/batches/preview", previewUpload.single("file"), async (req: Aut
   } catch (error) {
     return sendError(res, 400, "VALIDATION_ERROR", error instanceof Error ? error.message : "Failed to parse upload");
   }
+});
+
+spgRouter.post("/batches/revalidate", async (req: AuthedRequest, res) => {
+  const { month, year, rows: inputRows } = req.body || {};
+  if (!Number.isFinite(Number(month)) || !Number.isFinite(Number(year))) {
+    return sendError(res, 400, "VALIDATION_ERROR", "month and year are required");
+  }
+  if (!Array.isArray(inputRows) || inputRows.length === 0) {
+    return sendError(res, 400, "VALIDATION_ERROR", "rows array is required");
+  }
+  const employer = await requirePortalEmployer(req, res);
+  if (!employer) return;
+  const employerPayerId = employer.id;
+
+  const parsed = inputRows.map((r: { employeeName?: string; employeeIdentityNo?: string; amount?: number }, idx: number) => ({
+    rowNo: idx + 1,
+    employeeName: String(r.employeeName || "").trim(),
+    employeeIdentityNo: normalizeIdentity(String(r.employeeIdentityNo || "")),
+    amount: Number(r.amount) || 0,
+  }));
+
+  const preview = await annotatePreviewRows(parsed, employerPayerId, Number(month), Number(year));
+  const validRows = preview.filter((x) => x.errors.length === 0);
+  const totalAmount = validRows.reduce((sum, x) => sum + Number(x.amount || 0), 0);
+
+  return sendOk(res, {
+    employerPayerId,
+    month: Number(month),
+    year: Number(year),
+    rows: preview,
+    totals: {
+      rowCount: preview.length,
+      validRowCount: validRows.length,
+      invalidRowCount: preview.filter((x) => x.errors.length > 0).length,
+      duplicateRowCount: preview.filter((x) => x.duplicateInFile || x.duplicateInMonthBatch).length,
+      totalAmount,
+    },
+  });
 });
 
 spgRouter.post("/batches", slipUpload.single("supportingSlip"), async (req: AuthedRequest, res) => {
@@ -615,6 +677,41 @@ spgRouter.get("/admin/pending-batches", async (req: AuthedRequest, res) => {
     },
   });
   return sendOk(res, rows);
+});
+
+spgRouter.get("/admin/batches/:batchId", async (req: AuthedRequest, res) => {
+  if (!req.auth) return sendError(res, 401, "UNAUTHORIZED", "Authentication required");
+  const user = await prisma.user.findUnique({ where: { id: req.auth.userId }, select: { role: true } });
+  if (!user || !hasRole(user.role, ["penyelia", "eksekutif pemprosesan", "admin"])) {
+    return sendError(res, 403, "FORBIDDEN", "You do not have permission");
+  }
+
+  const batchId = Number(req.params.batchId);
+  if (!Number.isFinite(batchId)) return sendError(res, 400, "VALIDATION_ERROR", "Invalid batch id");
+
+  const batch = await prisma.spgPayrollBatch.findUnique({
+    where: { id: batchId },
+    include: {
+      lines: {
+        orderBy: { id: "asc" },
+      },
+      statusHistory: {
+        orderBy: { changedAt: "asc" },
+      },
+      receipt: true,
+      employer: {
+        select: { id: true, displayName: true, payerCode: true, identityNo: true, email: true },
+      },
+    },
+  });
+  if (!batch) return sendError(res, 404, "NOT_FOUND", "SPG batch not found");
+
+  const duplicateSummary = {
+    duplicateInFileCount: batch.lines.filter((x) => x.isDuplicateInFile).length,
+    duplicateInMonthBatchCount: batch.lines.filter((x) => x.isDuplicateInMonthBatch).length,
+  };
+
+  return sendOk(res, { ...batch, duplicateSummary });
 });
 
 spgRouter.post("/admin/batches/:batchId/approve", async (req: AuthedRequest, res) => {

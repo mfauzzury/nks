@@ -42,6 +42,7 @@ export type GuestReceiptResult = {
     amount: string;
     paymentMethod: string;
     status: string;
+    source: string;
     paidAt: string;
     previousTransactionCount: number;
     hasExistingIndividualAccount: boolean;
@@ -66,6 +67,28 @@ export type IdentityTransactionsResult = {
     }>;
   };
 };
+export type SpgAgreementResult = {
+  data: {
+    agreements: Array<{
+      employerName: string;
+      employerPayerCode: string;
+      deductionAmount: number | null;
+      agreementNo: string | null;
+      agreementEffectiveDate: string | null;
+      agreementExpiryDate: string | null;
+      employmentStatus: string | null;
+    }>;
+    deductionHistory: Array<{
+      batchReferenceNo: string;
+      periodMonth: number;
+      periodYear: number;
+      amount: number;
+      paidAt: string | null;
+      employerName: string;
+    }>;
+  };
+};
+
 export type PublicZakatType = {
   code: string;
   name: string;
@@ -170,6 +193,10 @@ export function getTransactionsByIdentity(identityNo: string) {
   return request<IdentityTransactionsResult>(`/api/guest-payments/by-identity/${encodeURIComponent(identityNo)}`);
 }
 
+export function getSpgAgreementByIdentity(identityNo: string) {
+  return request<SpgAgreementResult>(`/api/payers/portal-profile/${encodeURIComponent(identityNo)}/spg-agreement`);
+}
+
 export function getPublicZakatTypes() {
   return request<{ data: { types: PublicZakatType[] } }>("/api/settings/zakat-types");
 }
@@ -191,6 +218,60 @@ export function payZakatCorporate(input: {
   });
 }
 
+export type ScheduledPaymentResult = {
+  data: {
+    id: number;
+    scheduleRef: string;
+    status: string;
+    totalInstalments: number;
+    completedInstalments: number;
+    amountPerInstalment: string;
+    frequency: string;
+    nextChargeDate: string;
+    firstPayment: {
+      id: number;
+      receiptNo: string;
+    };
+  };
+};
+
+export function createScheduledPayment(input: {
+  payerName: string;
+  identityNo: string;
+  email?: string;
+  zakatType: string;
+  financialYear: string;
+  amountPerInstalment: number;
+  totalInstalments: number;
+  frequency: "monthly" | "quarterly" | "yearly";
+  cardLast4: string;
+  cardBrand: "VISA" | "MASTERCARD";
+  source?: string;
+  collectionPoint?: string;
+}) {
+  return request<ScheduledPaymentResult>("/api/scheduled-payments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getScheduledPaymentsByIdentity(identityNo: string) {
+  return request<{
+    data: Array<{
+      id: number;
+      scheduleRef: string;
+      zakatType: string;
+      amountPerInstalment: string;
+      totalInstalments: number;
+      completedInstalments: number;
+      frequency: string;
+      status: string;
+      nextChargeDate: string;
+      createdAt: string;
+    }>;
+  }>(`/api/scheduled-payments/by-identity/${encodeURIComponent(identityNo)}`);
+}
+
 function portalHeaders() {
   const session = getPortalSession();
   if (!session) return {};
@@ -206,6 +287,7 @@ export type SpgPreviewRow = {
   employeeIdentityNo: string;
   amount: number | null;
   errors: string[];
+  agreedAmount: number | null;
   duplicateInFile: boolean;
   duplicateInMonthBatch: boolean;
 };
@@ -294,6 +376,33 @@ export async function previewSpgBatchUpload(input: {
     method: "POST",
     headers: portalHeaders(),
     body,
+  });
+}
+
+export async function revalidateSpgBatch(input: {
+  employerPayerId: number;
+  month: number;
+  year: number;
+  rows: Array<{ employeeName: string; employeeIdentityNo: string; amount: number }>;
+}) {
+  return request<{
+    data: {
+      employerPayerId: number;
+      month: number;
+      year: number;
+      rows: SpgPreviewRow[];
+      totals: {
+        rowCount: number;
+        validRowCount: number;
+        invalidRowCount: number;
+        duplicateRowCount: number;
+        totalAmount: number;
+      };
+    };
+  }>("/api/spg/batches/revalidate", {
+    method: "POST",
+    headers: portalHeaders(),
+    body: JSON.stringify(input),
   });
 }
 

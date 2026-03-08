@@ -15,6 +15,13 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(value);
 }
 
+const CHANNEL_LABELS: Record<string, string> = {
+  FPX_B2B: "FPX Online",
+  CARD: "Debit/Credit Card",
+  CHEQUE: "Cek",
+  COUNTER_CASH: "Tunai / Kaunter",
+};
+
 export default function SpgOfficialReceiptPage() {
   const params = useParams<{ batchId: string }>();
   const session = usePortalSession();
@@ -52,7 +59,7 @@ export default function SpgOfficialReceiptPage() {
         {session && session.payerType !== "individu" ? <PortalSubnav role="corporate" session={session} variant="onDark" /> : null}
         <div>
           <h1 className="text-xl font-semibold text-white">Resit Rasmi SPG</h1>
-          <p className="text-sm text-purple-100">Resit rasmi hanya tersedia untuk batch `paid_success`.</p>
+          <p className="text-sm text-purple-100">Resit rasmi bayaran zakat melalui Skim Potongan Gaji.</p>
         </div>
 
         {error ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
@@ -67,19 +74,52 @@ export default function SpgOfficialReceiptPage() {
               <CardHeader className="border-b border-slate-200">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <ReceiptText className="h-5 w-5" />
-                  Official SPG Receipt
+                  Resit Rasmi SPG
                 </CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-2 pt-6 text-sm md:grid-cols-2">
-                <p><span className="font-medium">Receipt No:</span> {receipt.receiptNo}</p>
-                <p><span className="font-medium">Reference No:</span> {receipt.referenceNo}</p>
-                <p><span className="font-medium">Employer:</span> {receipt.employerName}</p>
-                <p><span className="font-medium">Employer Code:</span> {receipt.employerCode}</p>
-                <p><span className="font-medium">Period:</span> {String(receipt.month).padStart(2, "0")}/{receipt.year}</p>
-                <p><span className="font-medium">Channel:</span> {receipt.paymentChannel}</p>
-                <p><span className="font-medium">Paid At:</span> {receipt.paidAt ? new Date(receipt.paidAt).toLocaleString("ms-MY") : "-"}</p>
-                <p><span className="font-medium">Issued At:</span> {receipt.issuedAt ? new Date(receipt.issuedAt).toLocaleString("ms-MY") : "-"}</p>
-                <p className="md:col-span-2 text-base font-semibold">Jumlah: {formatCurrency(totalAmount)}</p>
+              <CardContent className="space-y-6 pt-6">
+                <div className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                  <p><span className="font-medium">No. Resit:</span> {receipt.receiptNo}</p>
+                  <p><span className="font-medium">No. Rujukan:</span> {receipt.referenceNo}</p>
+                  <p><span className="font-medium">Majikan:</span> {receipt.employerName}</p>
+                  <p><span className="font-medium">Kod Majikan:</span> {receipt.employerCode}</p>
+                  <p><span className="font-medium">Tempoh:</span> {String(receipt.month).padStart(2, "0")}/{receipt.year}</p>
+                  <p><span className="font-medium">Kaedah Bayaran:</span> {CHANNEL_LABELS[receipt.paymentChannel] || receipt.paymentChannel}</p>
+                  <p><span className="font-medium">Tarikh Bayaran:</span> {receipt.paidAt ? new Date(receipt.paidAt).toLocaleString("ms-MY") : "-"}</p>
+                  <p><span className="font-medium">Tarikh Dikeluarkan:</span> {receipt.issuedAt ? new Date(receipt.issuedAt).toLocaleString("ms-MY") : "-"}</p>
+                </div>
+
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-slate-700">Senarai Pekerja</h3>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left">
+                          <th className="px-3 py-2 text-xs font-semibold uppercase text-slate-500">#</th>
+                          <th className="px-3 py-2 text-xs font-semibold uppercase text-slate-500">Nama</th>
+                          <th className="px-3 py-2 text-xs font-semibold uppercase text-slate-500">No. IC</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-slate-500">Amaun (RM)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {receipt.lines.map((line, index) => (
+                          <tr key={line.id} className="border-b border-slate-100">
+                            <td className="px-3 py-2 text-slate-500">{index + 1}</td>
+                            <td className="px-3 py-2">{line.employeeName}</td>
+                            <td className="px-3 py-2">{line.employeeIdentityNo}</td>
+                            <td className="px-3 py-2 text-right">{formatCurrency(Number(line.amount))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                          <td colSpan={3} className="px-3 py-2 text-right">Jumlah</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(totalAmount)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -102,6 +142,7 @@ export default function SpgOfficialReceiptPage() {
                     totalAmount,
                     rowCount: receipt.rowCount,
                     issuedAt: receipt.issuedAt,
+                    lines: receipt.lines,
                   })
                 }
               >

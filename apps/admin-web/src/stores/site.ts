@@ -9,6 +9,7 @@ type SiteCache = {
   titleFormat: string;
   siteIconUrl: string;
   sidebarLogoUrl: string;
+  portalLogoUrl: string;
   footerText: string;
 };
 
@@ -18,6 +19,7 @@ function getDefaultSiteState(): SiteCache {
     titleFormat: "%page% | %site%",
     siteIconUrl: "",
     sidebarLogoUrl: "",
+    portalLogoUrl: "",
     footerText: "",
   };
 }
@@ -33,6 +35,7 @@ function readCachedSiteState(): SiteCache {
       titleFormat: parsed.titleFormat || "%page% | %site%",
       siteIconUrl: parsed.siteIconUrl || "",
       sidebarLogoUrl: parsed.sidebarLogoUrl || "",
+      portalLogoUrl: parsed.portalLogoUrl || "",
       footerText: parsed.footerText || "",
     };
   } catch {
@@ -53,6 +56,7 @@ export const useSiteStore = defineStore("site", {
         titleFormat: this.titleFormat || "%page% | %site%",
         siteIconUrl: this.siteIconUrl || "",
         sidebarLogoUrl: this.sidebarLogoUrl || "",
+        portalLogoUrl: this.portalLogoUrl || "",
         footerText: this.footerText || "",
       };
       window.localStorage.setItem(SITE_STORE_CACHE_KEY, JSON.stringify(cache));
@@ -65,6 +69,7 @@ export const useSiteStore = defineStore("site", {
         this.titleFormat = d.titleFormat || "%page% | %site%";
         this.siteIconUrl = d.siteIconUrl || "";
         this.sidebarLogoUrl = d.sidebarLogoUrl || "";
+        this.portalLogoUrl = d.portalLogoUrl || "";
         this.footerText = d.footerText || "";
       } catch {
         // Keep cached/current values if loading fails.
@@ -78,6 +83,7 @@ export const useSiteStore = defineStore("site", {
       this.titleFormat = payload.titleFormat || "%page% | %site%";
       this.siteIconUrl = payload.siteIconUrl || "";
       this.sidebarLogoUrl = payload.sidebarLogoUrl || "";
+      this.portalLogoUrl = payload.portalLogoUrl || "";
       this.footerText = payload.footerText || "";
       this.persist();
     },

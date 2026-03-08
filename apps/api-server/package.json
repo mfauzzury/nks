@@ -9,8 +9,7 @@
     "start": "node dist/server.js",
     "test": "tsx --test src/tests/*.test.ts",
     "db:generate": "prisma generate",
-    "db:init": "sh scripts/init-db.sh",
-    "db:push": "prisma db push || npm run db:init",
+    "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {

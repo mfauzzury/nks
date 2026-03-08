@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { Search, UserPlus } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
@@ -11,21 +11,47 @@ const loading = ref(false);
 const q = ref("");
 const type = ref<PayerType | "">("");
 const status = ref<PayerStatus | "">("");
+const page = ref(1);
+const limit = ref(20);
+const total = ref(0);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const fromRow = computed(() => (total.value === 0 ? 0 : (page.value - 1) * limit.value + 1));
+const toRow = computed(() => Math.min(total.value, page.value * limit.value));
 
 async function load() {
   loading.value = true;
   try {
     const res = await listPayers({
-      page: 1,
-      limit: 50,
+      page: page.value,
+      limit: limit.value,
       q: q.value || undefined,
       type: type.value || undefined,
       status: status.value || undefined,
     });
     rows.value = res.data;
+    const meta = (res.meta || {}) as { total?: number };
+    total.value = Number(meta.total || 0);
   } finally {
     loading.value = false;
   }
+}
+
+async function search() {
+  page.value = 1;
+  await load();
+}
+
+async function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  await load();
+}
+
+async function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+  await load();
 }
 
 onMounted(load);
@@ -59,7 +85,7 @@ onMounted(load);
             <option value="suspended">Gantung</option>
             <option value="merged">Merged</option>
           </select>
-          <button class="flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800" @click="load">
+          <button class="flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800" @click="search">
             <Search class="h-4 w-4" /> Cari
           </button>
         </div>
@@ -97,6 +123,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Papar {{ fromRow }}-{{ toRow }} daripada {{ total }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
       </article>
 

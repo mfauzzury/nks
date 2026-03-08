@@ -55,7 +55,8 @@ export default function IndividualPaySuccessPage() {
       <div className="pointer-events-none absolute -left-10 -bottom-8 h-40 w-40 rounded-full portal-orb-2 blur-3xl animate-[float_11s_ease-in-out_infinite]" />
 
       <div className="mx-auto w-full max-w-6xl space-y-6 px-4 md:px-6">
-        {session?.payerType === "individu" ? <PortalSubnav role="individu" session={session} variant="onDark" /> : null}
+        {session?.payerType === "individu" && <PortalSubnav role="individu" session={session} variant="onDark" />}
+        {session && session.payerType !== "individu" && <PortalSubnav role="corporate" session={session} variant="onDark" />}
 
         {/* Processing animation */}
         {phase === "processing" && (

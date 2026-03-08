@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { getPaymentGateways, savePaymentGateways } from "@/api/cms";
@@ -9,6 +9,14 @@ const rows = ref<PaymentGatewayConfig[]>([]);
 const saving = ref(false);
 const saved = ref(false);
 const error = ref("");
+const page = ref(1);
+const limit = ref(20);
+const total = computed(() => rows.value.length);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const pagedRows = computed(() => {
+  const start = (page.value - 1) * limit.value;
+  return rows.value.slice(start, start + limit.value);
+});
 
 async function load() {
   try {
@@ -24,7 +32,8 @@ function addRow() {
 }
 
 function removeRow(index: number) {
-  rows.value.splice(index, 1);
+  const absoluteIndex = (page.value - 1) * limit.value + index;
+  rows.value.splice(absoluteIndex, 1);
 }
 
 async function save() {
@@ -43,6 +52,16 @@ async function save() {
   } finally {
     saving.value = false;
   }
+}
+
+function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+}
+
+function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
 }
 
 onMounted(load);
@@ -69,7 +88,7 @@ onMounted(load);
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="(row, idx) in rows" :key="idx">
+              <tr v-for="(row, idx) in pagedRows" :key="(page - 1) * limit + idx">
                 <td class="px-3 py-2"><input v-model="row.code" class="w-full rounded border border-slate-300 px-2 py-1.5" /></td>
                 <td class="px-3 py-2"><input v-model="row.name" class="w-full rounded border border-slate-300 px-2 py-1.5" /></td>
                 <td class="px-3 py-2">
@@ -88,6 +107,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="mt-2 flex items-center justify-between">
+          <p class="text-xs text-slate-500">Papar {{ total === 0 ? 0 : (page - 1) * limit + 1 }}-{{ Math.min(total, page * limit) }} daripada {{ total }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
         <div class="mt-4 flex items-center gap-3">
           <button class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white" :disabled="saving" @click="save">

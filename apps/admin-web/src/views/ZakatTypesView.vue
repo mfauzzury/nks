@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { Plus, ScrollText, Pencil } from "lucide-vue-next";
 
@@ -10,6 +10,14 @@ import type { ZakatTypeConfig } from "@/types";
 const router = useRouter();
 const rows = ref<ZakatTypeConfig[]>([]);
 const error = ref("");
+const page = ref(1);
+const limit = ref(20);
+const total = computed(() => rows.value.length);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const pagedRows = computed(() => {
+  const start = (page.value - 1) * limit.value;
+  return rows.value.slice(start, start + limit.value);
+});
 
 async function load() {
   try {
@@ -21,6 +29,16 @@ async function load() {
 }
 
 onMounted(load);
+
+function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+}
+
+function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+}
 </script>
 
 <template>
@@ -56,7 +74,7 @@ onMounted(load);
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="(row, idx) in rows" :key="idx" class="transition-colors hover:bg-slate-50">
+              <tr v-for="(row, idx) in pagedRows" :key="(page - 1) * limit + idx" class="transition-colors hover:bg-slate-50">
                 <td class="px-4 py-2 font-medium text-slate-900">{{ row.code }}</td>
                 <td class="px-4 py-2 text-slate-800">{{ row.name }}</td>
                 <td class="px-4 py-2">
@@ -89,6 +107,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Papar {{ total === 0 ? 0 : (page - 1) * limit + 1 }}-{{ Math.min(total, page * limit) }} daripada {{ total }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
         <div v-if="error" class="mt-3 text-sm text-rose-700">{{ error }}</div>
       </article>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { CheckCircle2, Play, Upload, Wrench } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
@@ -21,9 +21,27 @@ const loading = ref(false);
 const actionLoading = ref(false);
 const cases = ref<ReconciliationCaseRow[]>([]);
 const matchedBatches = ref<CounterDepositBatchRow[]>([]);
+const casePage = ref(1);
+const caseLimit = ref(20);
+const batchPage = ref(1);
+const batchLimit = ref(20);
 const reason = ref("");
 const error = ref("");
 const message = ref("");
+
+const caseTotal = computed(() => cases.value.length);
+const caseTotalPages = computed(() => Math.max(1, Math.ceil(caseTotal.value / caseLimit.value)));
+const pagedCases = computed(() => {
+  const start = (casePage.value - 1) * caseLimit.value;
+  return cases.value.slice(start, start + caseLimit.value);
+});
+
+const batchTotal = computed(() => matchedBatches.value.length);
+const batchTotalPages = computed(() => Math.max(1, Math.ceil(batchTotal.value / batchLimit.value)));
+const pagedMatchedBatches = computed(() => {
+  const start = (batchPage.value - 1) * batchLimit.value;
+  return matchedBatches.value.slice(start, start + batchLimit.value);
+});
 
 function fmtCurrency(value: number) {
   return new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(Number(value || 0));
@@ -47,6 +65,8 @@ async function load() {
     ]);
     cases.value = casesRes.data || [];
     matchedBatches.value = batchesRes.data || [];
+    if (casePage.value > caseTotalPages.value) casePage.value = caseTotalPages.value;
+    if (batchPage.value > batchTotalPages.value) batchPage.value = batchTotalPages.value;
   } finally {
     loading.value = false;
   }
@@ -141,6 +161,26 @@ async function confirmBatch(batchId: number) {
   }
 }
 
+function prevCasePage() {
+  if (casePage.value <= 1) return;
+  casePage.value -= 1;
+}
+
+function nextCasePage() {
+  if (casePage.value >= caseTotalPages.value) return;
+  casePage.value += 1;
+}
+
+function prevBatchPage() {
+  if (batchPage.value <= 1) return;
+  batchPage.value -= 1;
+}
+
+function nextBatchPage() {
+  if (batchPage.value >= batchTotalPages.value) return;
+  batchPage.value += 1;
+}
+
 onMounted(load);
 </script>
 
@@ -198,7 +238,7 @@ onMounted(load);
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="item in cases" :key="item.id" class="transition-colors hover:bg-slate-50">
+              <tr v-for="item in pagedCases" :key="item.id" class="transition-colors hover:bg-slate-50">
                 <td class="px-3 py-2 font-medium text-slate-800">#{{ item.id }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ item.caseType }}</td>
                 <td class="px-3 py-2 text-slate-600">
@@ -238,6 +278,14 @@ onMounted(load);
             </tbody>
           </table>
         </div>
+        <div class="mt-2 flex items-center justify-between">
+          <p class="text-xs text-slate-500">Papar {{ caseTotal === 0 ? 0 : (casePage - 1) * caseLimit + 1 }}-{{ Math.min(caseTotal, casePage * caseLimit) }} daripada {{ caseTotal }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="casePage <= 1" @click="prevCasePage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ casePage }} / {{ caseTotalPages }}</span>
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="casePage >= caseTotalPages" @click="nextCasePage">Next</button>
+          </div>
+        </div>
       </article>
 
       <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -254,7 +302,7 @@ onMounted(load);
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-for="b in matchedBatches" :key="b.id">
+              <tr v-for="b in pagedMatchedBatches" :key="b.id">
                 <td class="px-3 py-2 font-medium text-slate-800">{{ b.referenceNo }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ b.depositType }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ fmtDate(b.depositDate) }}</td>
@@ -268,6 +316,14 @@ onMounted(load);
               <tr v-if="matchedBatches.length === 0"><td colspan="5" class="px-3 py-5 text-center text-slate-400">Tiada batch menunggu confirm.</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="mt-2 flex items-center justify-between">
+          <p class="text-xs text-slate-500">Papar {{ batchTotal === 0 ? 0 : (batchPage - 1) * batchLimit + 1 }}-{{ Math.min(batchTotal, batchPage * batchLimit) }} daripada {{ batchTotal }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="batchPage <= 1" @click="prevBatchPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ batchPage }} / {{ batchTotalPages }}</span>
+            <button class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 disabled:opacity-50" :disabled="batchPage >= batchTotalPages" @click="nextBatchPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

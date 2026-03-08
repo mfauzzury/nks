@@ -32,6 +32,8 @@ import PayerSpgListView from "@/views/PayerSpgListView.vue";
 import SpgEmployeesView from "@/views/SpgEmployeesView.vue";
 import DuplicateCasesView from "@/views/DuplicateCasesView.vue";
 import DuplicateCaseDetailView from "@/views/DuplicateCaseDetailView.vue";
+import AccountDetectionMergeView from "@/views/AccountDetectionMergeView.vue";
+import AccountReconciliationQueueView from "@/views/AccountReconciliationQueueView.vue";
 import ZakatTypesView from "@/views/ZakatTypesView.vue";
 import PaymentGatewaysView from "@/views/PaymentGatewaysView.vue";
 import ZakatTypeEditorView from "@/views/ZakatTypeEditorView.vue";
@@ -41,6 +43,7 @@ import CounterPaymentsListView from "@/views/CounterPaymentsListView.vue";
 import CounterDepositsView from "@/views/CounterDepositsView.vue";
 import CounterReconciliationView from "@/views/CounterReconciliationView.vue";
 import CounterPosView from "@/views/CounterPosView.vue";
+import ScheduledPaymentsView from "@/views/ScheduledPaymentsView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 
@@ -75,8 +78,12 @@ const router = createRouter({
     { path: "/counter/deposits", name: "counter-deposits", component: CounterDepositsView, meta: { requiresAuth: true, title: "Konsolidasi Bank-In" } },
     { path: "/counter/reconciliation", name: "counter-reconciliation", component: CounterReconciliationView, meta: { requiresAuth: true, title: "Rekonsiliasi Bank" } },
     { path: "/counter/pos", name: "counter-pos", component: CounterPosView, meta: { requiresAuth: true, title: "POS Kaunter" } },
+    { path: "/scheduled-payments", name: "scheduled-payments", component: ScheduledPaymentsView, meta: { requiresAuth: true, title: "Penjadualan Bayaran" } },
     { path: "/duplicates", name: "duplicates", component: DuplicateCasesView, meta: { requiresAuth: true, title: "Duplicate Cases" } },
     { path: "/duplicates/:id", name: "duplicate-detail", component: DuplicateCaseDetailView, meta: { requiresAuth: true, title: "Duplicate Case Detail" } },
+    { path: "/reconciliation/queue", redirect: "/reconciliation/account-merge/queue" },
+    { path: "/reconciliation/account-merge/queue", name: "reconciliation-queue", component: AccountReconciliationQueueView, meta: { requiresAuth: true, title: "Reconciliation Queue" } },
+    { path: "/reconciliation/account-merge", name: "account-merge", component: AccountDetectionMergeView, meta: { requiresAuth: true, title: "Account Detection & Merge" } },
     { path: "/zakat-config/types", name: "zakat-types", component: ZakatTypesView, meta: { requiresAuth: true, title: "Jenis Zakat" } },
     { path: "/zakat-config/types/:code", name: "zakat-types-edit", component: ZakatTypeEditorView, meta: { requiresAuth: true, title: "Edit Jenis Zakat" } },
     { path: "/zakat-config/payment-gateways", name: "zakat-payment-gateways", component: PaymentGatewaysView, meta: { requiresAuth: true, title: "Gerbang Pembayaran" } },

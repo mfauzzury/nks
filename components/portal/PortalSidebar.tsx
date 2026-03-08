@@ -10,7 +10,7 @@ const navByRole = {
     { href: "/portal/individual/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/payer/individual/pay", label: "Bayar Zakat", icon: CreditCard },
     { href: "/payer/individual/register", label: "Kemaskini Profil", icon: UserRound },
-    { href: "/payer/individual/pay", label: "Rekod Sumbangan", icon: FileText },
+    { href: "/payer/individual/pay", label: "Rekod Zakat", icon: FileText },
   ],
   corporate: [
     { href: "/portal/corporate/dashboard", label: "Dashboard", icon: LayoutDashboard },

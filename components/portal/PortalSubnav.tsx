@@ -5,19 +5,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { Home, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clearPortalSession, type PortalSession } from "@/lib/portal-session";
+import { useSiteSettings, resolveAssetUrl } from "@/lib/site-settings";
 
 const navByRole = {
   individu: [
     { href: "/portal/individual/dashboard", label: "Dashboard" },
     { href: "/payer/individual/pay", label: "Bayar Zakat" },
     { href: "/payer/individual/register", label: "Kemaskini Profil" },
-    { href: "/payer/individual/records", label: "Rekod Sumbangan" },
+    { href: "/payer/individual/records", label: "Rekod Zakat" },
   ],
   corporate: [
     { href: "/portal/corporate/dashboard", label: "Dashboard" },
     { href: "/payer/corporate/zakat", label: "Bayar Zakat Korporat" },
     { href: "/payer/corporate/spg", label: "Urus SPG" },
-    { href: "/payer/corporate/records", label: "Rekod Sumbangan" },
+    { href: "/payer/corporate/records", label: "Rekod Zakat" },
     { href: "/payer/corporate/register", label: "Kemaskini Syarikat" },
   ],
 } as const;
@@ -33,6 +34,7 @@ export function PortalSubnav({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const settings = useSiteSettings();
   const items = navByRole[role];
 
   function isActivePath(href: string) {
@@ -48,10 +50,16 @@ export function PortalSubnav({
     <div className="w-full pb-3">
       <div className="flex w-full flex-wrap items-center justify-between gap-3 px-0 py-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("inline-flex items-center gap-2 whitespace-nowrap px-1 py-2 text-[18px] font-bold tracking-tight", variant === "onDark" ? "text-white" : "text-slate-800")}>
-            <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border-2 border-white text-xs font-bold text-white">SK</span>
-            SenangKutipan
-          </span>
+          {settings.portalLogoUrl ? (
+            <span className="inline-flex items-center whitespace-nowrap px-1 py-2">
+              <img src={resolveAssetUrl(settings.portalLogoUrl)} alt={settings.siteTitle || "Logo"} className="h-8 w-auto object-contain" />
+            </span>
+          ) : (
+            <span className={cn("inline-flex items-center gap-2 whitespace-nowrap px-1 py-2 text-[18px] font-bold tracking-tight", variant === "onDark" ? "text-white" : "text-slate-800")}>
+              <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg border-2 border-white text-xs font-bold text-white">SK</span>
+              {settings.siteTitle || "SenangKutipan"}
+            </span>
+          )}
           <span className={cn("ml-2.5 h-5 w-px shrink-0", variant === "onDark" ? "bg-white/30" : "bg-slate-300")} />
           <Link
             href="/"
@@ -88,10 +96,6 @@ export function PortalSubnav({
         </div>
         {session ? (
           <div className="flex items-center gap-2">
-            <div className="text-right">
-              <p className={cn("text-xs font-semibold", variant === "onDark" ? "text-white" : "text-slate-800")}>{session.displayName}</p>
-              <p className={cn("text-[11px]", variant === "onDark" ? "text-white/70" : "text-slate-500")}>{session.payerCode}</p>
-            </div>
             <button
               type="button"
               onClick={onLogout}
