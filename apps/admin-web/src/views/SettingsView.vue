@@ -31,6 +31,7 @@ const form = ref<SettingsPayload>({
   metaDescription: "",
   siteIconUrl: "",
   sidebarLogoUrl: "",
+  portalLogoUrl: "",
   faviconUrl: "",
   language: "en",
   timezone: "UTC",
@@ -42,11 +43,11 @@ const saving = ref(false);
 const error = ref("");
 const uploadingSiteIcon = ref(false);
 const uploadingSidebarLogo = ref(false);
+const uploadingPortalLogo = ref(false);
 const uploadingFavicon = ref(false);
 
 const mediaPickerOpen = ref(false);
-const dragMediaPicker = useDraggableModal();
-const mediaPickerTarget = ref<"siteIconUrl" | "faviconUrl" | "sidebarLogoUrl">("siteIconUrl");
+const mediaPickerTarget = ref<"siteIconUrl" | "faviconUrl" | "sidebarLogoUrl" | "portalLogoUrl">("siteIconUrl");
 const mediaPickerItems = ref<Media[]>([]);
 const mediaPickerLoading = ref(false);
 
@@ -120,6 +121,22 @@ async function onSidebarLogoUpload(event: Event) {
     error.value = e instanceof Error ? e.message : "Failed to upload sidebar logo";
   } finally {
     uploadingSidebarLogo.value = false;
+    (event.target as HTMLInputElement).value = "";
+  }
+}
+
+async function onPortalLogoUpload(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  uploadingPortalLogo.value = true;
+  error.value = "";
+  try {
+    const res = await uploadMedia(file);
+    form.value.portalLogoUrl = res.data.url;
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : "Failed to upload portal logo";
+  } finally {
+    uploadingPortalLogo.value = false;
     (event.target as HTMLInputElement).value = "";
   }
 }
@@ -308,6 +325,35 @@ onMounted(load);
                       Remove
                     </button>
                     <p class="text-xs text-slate-400">Shown at top of sidebar when provided.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Portal Logo -->
+              <div class="space-y-3">
+                <label class="text-sm font-medium text-slate-700">Portal Logo</label>
+                <div class="flex items-start gap-4">
+                  <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-50">
+                    <img v-if="form.portalLogoUrl" :src="resolveUrl(form.portalLogoUrl)" alt="Portal logo" class="h-full w-full object-contain" />
+                    <Image v-else class="h-8 w-8 text-slate-300" />
+                  </div>
+                  <div class="flex-1 space-y-2">
+                    <div class="flex gap-2">
+                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50">
+                        <Upload class="h-4 w-4" />
+                        {{ uploadingPortalLogo ? 'Uploading...' : 'Upload' }}
+                        <input type="file" accept="image/*" class="hidden" @change="onPortalLogoUpload" :disabled="uploadingPortalLogo" />
+                      </label>
+                      <button class="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50" @click="openMediaPicker('portalLogoUrl')">
+                        <FolderOpen class="h-4 w-4" />
+                        Library
+                      </button>
+                    </div>
+                    <button v-if="form.portalLogoUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="form.portalLogoUrl = ''">
+                      <Trash2 class="h-3 w-3" />
+                      Remove
+                    </button>
+                    <p class="text-xs text-slate-400">Displayed on storefront header, portal navigation, and POS screen.</p>
                   </div>
                 </div>
               </div>

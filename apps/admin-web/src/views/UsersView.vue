@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   Users,
   Plus,
@@ -13,16 +13,38 @@ import AdminLayout from "@/layouts/AdminLayout.vue";
 import { listUsers, deleteUser } from "@/api/cms";
 import type { UserDetail } from "@/types";
 
-const users = ref<UserDetail[]>([]);
+const allUsers = ref<UserDetail[]>([]);
+const page = ref(1);
+const limit = ref(20);
+
+const total = computed(() => allUsers.value.length);
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const fromRow = computed(() => (total.value === 0 ? 0 : (page.value - 1) * limit.value + 1));
+const toRow = computed(() => Math.min(total.value, page.value * limit.value));
+const users = computed(() => {
+  const start = (page.value - 1) * limit.value;
+  return allUsers.value.slice(start, start + limit.value);
+});
 
 async function load() {
   const res = await listUsers();
-  users.value = res.data;
+  allUsers.value = res.data;
+  if (page.value > totalPages.value) page.value = totalPages.value;
 }
 
 async function remove(id: number) {
   await deleteUser(id);
   await load();
+}
+
+function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+}
+
+function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
 }
 
 onMounted(load);
@@ -95,6 +117,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Showing {{ fromRow }}-{{ toRow }} of {{ total }} users</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

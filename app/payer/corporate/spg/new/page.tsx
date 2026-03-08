@@ -11,7 +11,11 @@ import {
   Check,
   CheckCircle2,
   ClipboardList,
+  Coins,
+  CreditCard,
   Download,
+  FileCheck,
+  Landmark,
   Plus,
   Send,
   Trash2,
@@ -22,6 +26,7 @@ import {
   downloadSpgTemplate,
   initiateSpgOnlinePayment,
   previewSpgBatchUpload,
+  revalidateSpgBatch,
   type SpgPreviewRow,
 } from "@/lib/payer-portal-api";
 import { usePortalSession } from "@/lib/use-portal-session";
@@ -36,16 +41,17 @@ type EditableRow = {
   employeeName: string;
   employeeIdentityNo: string;
   amount: string;
+  agreedAmount: number | null;
   duplicateInFile: boolean;
   duplicateInMonthBatch: boolean;
   errors: string[];
 };
 
 const CHANNELS = [
-  { code: "FPX_B2B", label: "FPX B2B", online: true },
-  { code: "CARD", label: "Kad Kredit", online: true },
-  { code: "CHEQUE", label: "Cek", online: false },
-  { code: "COUNTER_CASH", label: "Kaunter Tunai", online: false },
+  { code: "FPX_B2B", label: "FPX Online", online: true, icon: Landmark },
+  { code: "CARD", label: "Debit/Credit Card", online: true, icon: CreditCard },
+  { code: "CHEQUE", label: "Cek", online: false, icon: FileCheck },
+  { code: "COUNTER_CASH", label: "Tunai / Kaunter", online: false, icon: Coins },
 ] as const;
 
 const STEPS = [
@@ -75,6 +81,7 @@ function mapPreviewRow(row: SpgPreviewRow): EditableRow {
     employeeName: row.employeeName,
     employeeIdentityNo: row.employeeIdentityNo,
     amount: row.amount != null ? String(row.amount) : "",
+    agreedAmount: row.agreedAmount ?? null,
     duplicateInFile: row.duplicateInFile,
     duplicateInMonthBatch: row.duplicateInMonthBatch,
     errors: row.errors,
@@ -96,6 +103,9 @@ function validateRows(rows: EditableRow[]) {
     if (!normalizedIc || normalizedIc.length < 3) errors.push("No. IC wajib");
     if (!Number.isFinite(amount) || amount <= 0) errors.push("Amaun mesti > 0");
     if (Number.isFinite(amount) && !Number.isInteger(amount * 100)) errors.push("Maks 2 perpuluhan");
+    if (row.agreedAmount != null && Number.isFinite(amount) && amount > 0 && amount !== row.agreedAmount) {
+      errors.push(`Amaun tidak sepadan perjanjian (RM ${row.agreedAmount.toFixed(2)})`);
+    }
     return {
       ...row,
       employeeIdentityNo: normalizedIc,
@@ -110,7 +120,7 @@ function StepIndicator({ current }: { current: number }) {
     <nav className="relative flex items-center justify-between">
       <div className="absolute left-0 right-0 top-5 z-0 mx-10 h-0.5 bg-slate-200" />
       <div
-        className="absolute left-0 top-5 z-0 mx-10 h-0.5 portal-bg-accent transition-all duration-300"
+        className="absolute left-0 top-5 z-0 mx-10 h-0.5 bg-blue-600 transition-all duration-300"
         style={{ width: `${((Math.min(current, 5) - 1) / 4) * 100}%` }}
       />
       {STEPS.map((s) => {
@@ -122,15 +132,15 @@ function StepIndicator({ current }: { current: number }) {
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
                 done
-                  ? "portal-border-secondary portal-bg-accent portal-text-accent"
+                  ? "border-blue-600 bg-blue-600 text-white"
                   : active
-                    ? "portal-border-secondary bg-white portal-text-accent shadow-sm shadow-yellow-300"
+                    ? "border-blue-600 bg-white text-blue-600 shadow-sm shadow-blue-200"
                     : "border-slate-200 bg-white text-slate-400"
               }`}
             >
               {done ? <Check className="h-4.5 w-4.5" /> : <Icon className="h-4.5 w-4.5" />}
             </div>
-            <span className={`text-xs font-medium ${done || active ? "portal-text-secondary" : "text-slate-400"}`}>
+            <span className={`text-xs font-medium ${done || active ? "text-blue-600" : "text-slate-400"}`}>
               {s.label}
             </span>
           </div>
@@ -208,11 +218,45 @@ export default function SpgNewSubmissionPage() {
         employeeName: "",
         employeeIdentityNo: "",
         amount: "",
+        agreedAmount: null,
         duplicateInFile: false,
         duplicateInMonthBatch: false,
         errors: [],
       },
     ]);
+  }
+
+  async function onRevalidateAndProceed() {
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const payloadRows = rows.map((row) => ({
+        employeeName: row.employeeName.trim(),
+        employeeIdentityNo: normalizeIdentity(row.employeeIdentityNo),
+        amount: Number(row.amount) || 0,
+      }));
+      const res = await revalidateSpgBatch({
+        employerPayerId,
+        month: Number(month),
+        year: Number(year),
+        rows: payloadRows,
+      });
+      setRows(res.data.rows.map(mapPreviewRow));
+      const hasIssues = res.data.rows.some(
+        (r) => r.errors.length > 0 || r.duplicateInFile || r.duplicateInMonthBatch,
+      );
+      if (hasIssues) {
+        setError(`Masih ada ${res.data.totals.invalidRowCount + res.data.totals.duplicateRowCount} baris bermasalah. Sila betulkan sebelum meneruskan.`);
+      } else {
+        setMessage(`Semua ${res.data.totals.validRowCount} baris disahkan. Meneruskan...`);
+        setStep(4);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mengesahkan data");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function submitBatch() {
@@ -313,7 +357,17 @@ export default function SpgNewSubmissionPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Tahun</Label>
-                  <Input value={year} onChange={(e) => setYear(e.target.value)} />
+                  <select
+                    className="flex h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 text-base portal-focus"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                  >
+                    {Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                      <option key={y} value={String(y)}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="mt-6 rounded-xl bg-slate-50 p-4 text-center">
@@ -385,8 +439,8 @@ export default function SpgNewSubmissionPage() {
 
         {/* ── Step 3: Preview / Edit ── */}
         {step === 3 && (
-          <div className="rounded-2xl border border-white/20 portal-card shadow-md">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-md">
+<div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Semak & Edit Senarai Pekerja</h2>
                 <p className="text-sm text-slate-500">Betulkan baris yang ada isu sebelum meneruskan.</p>
@@ -414,56 +468,120 @@ export default function SpgNewSubmissionPage() {
                 <p className="mt-0.5 text-lg font-semibold text-slate-900">{moneyFormat(totalAmount)}</p>
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-slate-100 px-6 py-2.5">
+              <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Petunjuk:</span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100"><CheckCircle2 className="h-3 w-3 text-emerald-600" /></span>
+                Sah
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100"><AlertCircle className="h-3 w-3 text-red-600" /></span>
+                Ralat (data tidak lengkap / amaun tidak sepadan)
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100"><AlertCircle className="h-3 w-3 text-amber-600" /></span>
+                Duplikat (IC sama dalam fail / batch)
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-block h-3.5 w-6 rounded border-2 border-red-400 bg-red-50" />
+                Amaun tak sepadan perjanjian
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                <span className="inline-block h-3.5 w-6 rounded border-2 border-amber-400 bg-amber-50" />
+                IC duplikat
+              </span>
+            </div>
             <div className="overflow-x-auto px-4 py-4">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left">
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
+                    <th className="w-8 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
                     <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Pekerja</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">No. IC</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Amaun (RM)</th>
-                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                    <th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500"></th>
+                    <th className="w-36 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">No. IC</th>
+                    <th className="w-28 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Amaun (RM)</th>
+                    <th className="w-28 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Perjanjian</th>
+                    <th className="w-16 px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                    <th className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan</th>
+                    <th className="w-8 px-2 py-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {validatedRows.map((row, idx) => (
-                    <tr key={row.id} className="group">
-                      <td className="px-2 py-2 text-xs text-slate-400">{idx + 1}</td>
-                      <td className="px-2 py-2">
-                        <Input className="h-8 text-sm" value={row.employeeName} onChange={(e) => updateRow(row.id, { employeeName: e.target.value })} placeholder="Nama pekerja" />
-                      </td>
-                      <td className="px-2 py-2">
-                        <Input className="h-8 text-sm" value={row.employeeIdentityNo} onChange={(e) => updateRow(row.id, { employeeIdentityNo: e.target.value })} placeholder="No. IC" />
-                      </td>
-                      <td className="px-2 py-2">
-                        <Input className="h-8 w-28 text-sm" value={row.amount} onChange={(e) => updateRow(row.id, { amount: e.target.value })} placeholder="0.00" />
-                      </td>
-                      <td className="px-2 py-2">
-                        {row.errors.length > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
-                            <AlertCircle className="h-3 w-3" />
-                            {row.errors[0]}
-                          </span>
-                        ) : row.duplicateInFile || row.duplicateInMonthBatch ? (
-                          <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">Duplikat</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Sah
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <button type="button" onClick={() => removeRow(row.id)} className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" title="Buang baris">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {validatedRows.map((row, idx) => {
+                    const hasErrors = row.errors.length > 0;
+                    const isDuplicate = row.duplicateInFile || row.duplicateInMonthBatch;
+                    const amountMismatch = row.agreedAmount != null && Number(row.amount) > 0 && Number(row.amount) !== row.agreedAmount;
+                    const hasIssue = hasErrors || isDuplicate;
+                    const duplicateRows = isDuplicate
+                      ? validatedRows
+                          .map((r, i) => ({ idx: i + 1, ic: normalizeIdentity(r.employeeIdentityNo) }))
+                          .filter((r) => r.ic === normalizeIdentity(row.employeeIdentityNo) && r.idx !== idx + 1)
+                          .map((r) => r.idx)
+                      : [];
+                    return (
+                      <tr key={row.id} className={`group ${hasIssue ? "bg-red-50/50" : ""}`}>
+                        <td className="px-2 py-2 text-xs text-slate-400">{idx + 1}</td>
+                        <td className="px-2 py-2">
+                          <Input className="h-8 text-sm" value={row.employeeName} onChange={(e) => updateRow(row.id, { employeeName: e.target.value })} placeholder="Nama pekerja" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <Input className={`h-8 w-36 text-sm ${isDuplicate ? "border-amber-400 bg-amber-50" : ""}`} value={row.employeeIdentityNo} onChange={(e) => updateRow(row.id, { employeeIdentityNo: e.target.value })} placeholder="No. IC" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <Input className={`h-8 w-28 text-sm text-right ${amountMismatch ? "border-red-400 bg-red-50" : ""}`} type="number" step="0.01" min="0" value={row.amount} onChange={(e) => updateRow(row.id, { amount: e.target.value })} placeholder="0.00" />
+                        </td>
+                        <td className="px-2 py-2">
+                          {row.agreedAmount != null ? (
+                            <span className={`block text-right text-xs font-medium ${amountMismatch ? "text-red-600" : "text-slate-500"}`}>
+                              {row.agreedAmount.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-300">-</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          {hasErrors ? (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-100" title={row.errors.join("; ")}>
+                              <AlertCircle className="h-3.5 w-3.5 text-red-600" />
+                            </span>
+                          ) : isDuplicate ? (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100" title="Duplikat">
+                              <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                            </span>
+                          ) : (
+                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="space-y-0.5">
+                            {row.errors.map((err, i) => (
+                              <p key={i} className="text-xs leading-snug text-red-600">{err}</p>
+                            ))}
+                            {row.duplicateInFile && (
+                              <p className="text-xs leading-snug text-amber-700">
+                                Duplikat dalam fail {duplicateRows.length > 0 ? `(sama dgn baris ${duplicateRows.join(", ")})` : ""}
+                              </p>
+                            )}
+                            {row.duplicateInMonthBatch && (
+                              <p className="text-xs leading-snug text-amber-700">Sudah ada dalam batch bulan ini</p>
+                            )}
+                            {!hasErrors && !isDuplicate && (
+                              <span className="text-xs text-slate-300">-</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <button type="button" onClick={() => removeRow(row.id)} className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" title="Buang baris">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {validatedRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-2 py-8 text-center text-sm text-slate-400">
+                      <td colSpan={8} className="px-2 py-8 text-center text-sm text-slate-400">
                         Tiada data. Sila muat naik fail atau tambah baris secara manual.
                       </td>
                     </tr>
@@ -476,8 +594,8 @@ export default function SpgNewSubmissionPage() {
                 <ArrowLeft className="h-4 w-4" />
                 Kembali
               </Button>
-              <Button type="button" className="gap-2" onClick={() => setStep(4)} disabled={validatedRows.length === 0 || hasRowIssues}>
-                Seterusnya
+              <Button type="button" className="gap-2" onClick={onRevalidateAndProceed} disabled={loading || validatedRows.length === 0}>
+                {loading ? "Mengesahkan..." : "Semak & Teruskan"}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -494,26 +612,26 @@ export default function SpgNewSubmissionPage() {
             <div className="space-y-5 px-6 py-5">
               <div>
                 <Label className="mb-3 block">Kaedah Bayaran</Label>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {CHANNELS.map((ch) => (
-                    <button
-                      key={ch.code}
-                      type="button"
-                      onClick={() => setPaymentChannel(ch.code)}
-                      className={`rounded-xl border-2 p-3 text-left transition ${
-                        paymentChannel === ch.code
-                          ? "portal-border-secondary bg-yellow-50"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      <p className={`text-sm font-medium ${paymentChannel === ch.code ? "portal-text-accent" : "text-slate-700"}`}>
+                <div className="flex flex-wrap gap-2">
+                  {CHANNELS.map((ch) => {
+                    const active = paymentChannel === ch.code;
+                    const Icon = ch.icon;
+                    return (
+                      <button
+                        key={ch.code}
+                        type="button"
+                        onClick={() => setPaymentChannel(ch.code)}
+                        className={`inline-flex items-center gap-2 rounded-lg border-2 px-3.5 py-2.5 text-sm font-medium transition ${
+                          active
+                            ? "border-blue-600 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <Icon className={`h-4 w-4 ${active ? "text-blue-600" : "text-slate-400"}`} />
                         {ch.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {ch.online ? "Bayaran dalam talian" : "Bayaran luar talian"}
-                      </p>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div className="space-y-2">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { Building2, Eye, Plus, Search } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
@@ -10,6 +10,13 @@ const rows = ref<CorporateDirectoryRow[]>([]);
 const loading = ref(false);
 const q = ref("");
 const category = ref<CorporateDirectoryCategory>("all");
+const page = ref(1);
+const limit = ref(20);
+const total = ref(0);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const fromRow = computed(() => (total.value === 0 ? 0 : (page.value - 1) * limit.value + 1));
+const toRow = computed(() => Math.min(total.value, page.value * limit.value));
 
 async function load() {
   loading.value = true;
@@ -17,13 +24,32 @@ async function load() {
     const res = await listCorporateDirectory({
       q: q.value || undefined,
       category: category.value,
-      limit: 100,
-      page: 1,
+      limit: limit.value,
+      page: page.value,
     });
     rows.value = res.data;
+    const meta = (res.meta || {}) as { total?: number };
+    total.value = Number(meta.total || 0);
   } finally {
     loading.value = false;
   }
+}
+
+async function search() {
+  page.value = 1;
+  await load();
+}
+
+async function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  await load();
+}
+
+async function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+  await load();
 }
 
 onMounted(load);
@@ -64,10 +90,10 @@ onMounted(load);
                   v-model="q"
                   placeholder="Carian SSM / nama / emel..."
                   class="w-64 rounded-lg border border-slate-300 py-1.5 pl-9 pr-3 text-sm shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  @keyup.enter="load"
+                  @keyup.enter="search"
                 />
               </div>
-              <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50" @click="load">Cari</button>
+              <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50" @click="search">Cari</button>
             </div>
           </div>
         </div>
@@ -124,6 +150,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Papar {{ fromRow }}-{{ toRow }} daripada {{ total }} rekod</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

@@ -155,6 +155,7 @@ model User {
   reconciliationAssigned   ReconciliationCase[]     @relation("ReconciliationAssignedTo")
   reconciliationResolved   ReconciliationCase[]     @relation("ReconciliationResolvedBy")
   counterStatusChanges     CounterStatusHistory[]
+  scheduledPaymentsCancelled ScheduledPayment[]   @relation("ScheduledPaymentCancelledBy")
 }
 
 model Role {
@@ -653,6 +654,66 @@ model CounterStatusHistory {
   reconciliationCase ReconciliationCase? @relation(fields: [reconciliationCaseId], references: [id], onDelete: Cascade)
 
   @@index([entityType, entityId, changedAt])
+}
+
+enum ScheduledPaymentStatus {
+  active
+  paused
+  completed
+  cancelled
+  failed
+}
+
+enum ScheduledPaymentFrequency {
+  monthly
+  quarterly
+  yearly
+}
+
+model ScheduledPayment {
+  id                   Int                       @id @default(autoincrement())
+  scheduleRef          String                    @unique
+  payerName            String
+  identityNo           String
+  email                String?
+  zakatType            String
+  financialYear        String
+  amountPerInstalment  Decimal                   @db.Decimal(18, 2)
+  totalInstalments     Int
+  completedInstalments Int                       @default(0)
+  frequency            ScheduledPaymentFrequency @default(monthly)
+  cardTokenMock        String                    @default("")
+  cardLast4            String                    @default("")
+  cardBrand            String                    @default("")
+  source               GuestPaymentSource        @default(ONLINE_GUEST)
+  collectionPoint      String?
+  nextChargeDate       DateTime
+  status               ScheduledPaymentStatus    @default(active)
+  pausedReason         String?                   @db.Text
+  cancelledReason      String?                   @db.Text
+  cancelledBy          Int?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  executions           ScheduledPaymentExecution[]
+  cancelledByUser      User?                     @relation("ScheduledPaymentCancelledBy", fields: [cancelledBy], references: [id], onDelete: SetNull)
+
+  @@index([identityNo, status])
+  @@index([nextChargeDate, status])
+  @@index([status, createdAt])
+}
+
+model ScheduledPaymentExecution {
+  id                 Int               @id @default(autoincrement())
+  scheduledPaymentId Int
+  instalmentNo       Int
+  guestPaymentId     Int               @unique
+  amount             Decimal           @db.Decimal(18, 2)
+  chargedAt          DateTime          @default(now())
+  status             String            @default("success")
+  failureReason      String?           @db.Text
+  scheduledPayment   ScheduledPayment  @relation(fields: [scheduledPaymentId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledPaymentId, instalmentNo])
 }
 
 model SpgPayrollBatch {

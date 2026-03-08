@@ -153,7 +153,7 @@ export default function CorporateRecordsPage() {
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-white">Rekod Sumbangan Korporat</h1>
+                <h1 className="text-xl font-semibold text-white">Rekod Zakat Korporat</h1>
                 <p className="text-sm text-purple-100">Sila log masuk untuk melihat rekod syarikat.</p>
               </div>
             </div>
@@ -186,7 +186,7 @@ export default function CorporateRecordsPage() {
                 <FileText className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-white">Rekod Sumbangan Korporat</h1>
+                <h1 className="text-xl font-semibold text-white">Rekod Zakat Korporat</h1>
                 <p className="text-sm text-purple-100">
                   {companyName} &middot; SSM: {identityNo}
                 </p>
@@ -195,11 +195,11 @@ export default function CorporateRecordsPage() {
             <select
               value={filterYear}
               onChange={(e) => setFilterYear(e.target.value)}
-              className="rounded-lg border-2 border-white/30 bg-white/15 px-4 py-2.5 text-sm text-white backdrop-blur-sm focus:border-white/50 focus:outline-none focus:ring-1 focus:ring-white/30"
+              className="rounded-lg border-2 border-slate-400 bg-white px-4 py-2.5 text-sm text-slate-700 portal-focus"
             >
-              <option value="" className="text-slate-900">Semua Tahun</option>
+              <option value="">Semua Tahun</option>
               {yearOptions.map((opt) => (
-                <option key={opt} value={opt} className="text-slate-900">{opt}</option>
+                <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
           </div>

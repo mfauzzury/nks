@@ -7,21 +7,21 @@ const features = [
     desc: "Bayar terus sebagai tetamu atau daftar akaun untuk semak rekod dan gabung transaksi lama.",
     href: "/payer/individual/pay",
     icon: HandCoins,
-    image: "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80",
+    image: "/images/malaysian-muslim-individual.jpg",
   },
   {
     title: "Korporat",
     desc: "Bayaran zakat syarikat dengan profil organisasi dan rekod transaksi yang konsisten.",
     href: "/payer/corporate/zakat",
     icon: Building2,
-    image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80",
+    image: "/images/malaysian-muslim-corporate.jpg",
   },
   {
     title: "Skim Potongan Gaji (SPG)",
     desc: "Urus sumbangan pekerja secara pukal, pantau status, dan selaras rekod pembayar individu.",
     href: "/payer/corporate/spg",
     icon: Users,
-    image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80",
+    image: "/images/malaysian-muslim-spg.jpg",
   },
 ];
 

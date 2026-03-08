@@ -12,7 +12,7 @@ export default function AboutPage() {
         </div>
         <div className="overflow-hidden rounded-2xl border border-slate-200">
           <img
-            src="https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80"
+            src="/images/malaysian-muslim-about.jpg"
             alt="Mesyuarat korporat"
             className="h-56 w-full object-cover lg:h-full"
           />

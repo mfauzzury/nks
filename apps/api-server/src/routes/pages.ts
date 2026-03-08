@@ -97,3 +97,4 @@ pagesRouter.delete("/:id", async (req, res) => {
   await prisma.page.delete({ where: { id } }).catch(() => null);
   return sendOk(res, { success: true });
 });
+

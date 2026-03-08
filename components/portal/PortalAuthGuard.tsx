@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { resolvePortalDashboard } from "@/lib/portal-session";
+import { getPortalSession, resolvePortalDashboard } from "@/lib/portal-session";
 import { usePortalSession } from "@/lib/use-portal-session";
 
 export function PortalAuthGuard({
@@ -14,24 +14,32 @@ export function PortalAuthGuard({
 }) {
   const router = useRouter();
   const session = usePortalSession();
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (!session) {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    // Re-read from sessionStorage directly to avoid stale SSR snapshot
+    const current = getPortalSession();
+    if (!current) {
       router.replace("/portal/login");
       return;
     }
 
-    if (expected === "individu" && session.payerType !== "individu") {
-      router.replace(resolvePortalDashboard(session.payerType));
+    if (expected === "individu" && current.payerType !== "individu") {
+      router.replace(resolvePortalDashboard(current.payerType));
       return;
     }
 
-    if (expected === "corporate" && session.payerType === "individu") {
+    if (expected === "corporate" && current.payerType === "individu") {
       router.replace("/portal/individual/dashboard");
     }
-  }, [expected, router, session]);
+  }, [expected, router, hydrated, session]);
 
-  if (!session) {
+  if (!hydrated || !session) {
     return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Memuatkan portal...</div>;
   }
 

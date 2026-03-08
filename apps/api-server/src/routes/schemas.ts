@@ -36,6 +36,7 @@ export const settingsInputSchema = z.object({
   metaDescription: z.string().default(""),
   siteIconUrl: z.string().default(""),
   sidebarLogoUrl: z.string().default(""),
+  portalLogoUrl: z.string().default(""),
   faviconUrl: z.string().default(""),
   language: z.string().min(1),
   timezone: z.string().min(1),
@@ -129,7 +130,7 @@ export const payerAddressInputSchema = z.object({
 
 export const payerContactPersonInputSchema = z.object({
   name: z.string().min(1),
-  icNo: z.string().optional(),
+  icNo: z.string().trim().max(30).optional(),
   position: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
@@ -159,7 +160,7 @@ export const payerDocumentInputSchema = z.object({
 
 const payerCoreInputSchema = z.object({
   displayName: z.string().min(1),
-  identityNo: z.string().optional(),
+  identityNo: z.string().trim().max(30).optional(),
   identityType: identityTypeSchema.optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
@@ -169,18 +170,32 @@ const payerCoreInputSchema = z.object({
 
 export const payerIndividualCreateSchema = payerCoreInputSchema.extend({
   fullName: z.string().min(1),
-  mykadOrPassport: z.string().min(3),
+  mykadOrPassport: z.string().trim().min(3).max(30),
   dob: z.string().datetime().optional(),
   gender: z.string().optional(),
   maritalStatus: z.string().optional(),
   occupation: z.string().optional(),
   incomeSource: z.string().optional(),
   monthlyIncome: z.number().nonnegative().optional(),
+}).superRefine((value, ctx) => {
+  const identityType = value.identityType ?? "mykad";
+  if (identityType !== "mykad") return;
+
+  const raw = value.mykadOrPassport;
+  const digitsOnly = raw.replace(/\D/g, "");
+  const hasOnlyDigitsAndSeparators = /^[0-9-\s]+$/.test(raw);
+  if (!hasOnlyDigitsAndSeparators || digitsOnly.length !== 12) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["mykadOrPassport"],
+      message: "MyKad mesti 12 digit",
+    });
+  }
 });
 
 export const payerCorporateCreateSchema = payerCoreInputSchema.extend({
   companyName: z.string().min(1),
-  ssmNo: z.string().min(3),
+  ssmNo: z.string().trim().min(3).max(30),
   companyType: z.string().optional(),
   taxNo: z.string().optional(),
   taxBranch: z.string().optional(),
@@ -200,7 +215,7 @@ export const payerSpgEmployerCreateSchema = payerCoreInputSchema.extend({
 
 export const payerUpdateSchema = z.object({
   displayName: z.string().min(1).optional(),
-  identityNo: z.string().optional(),
+  identityNo: z.string().trim().max(30).optional(),
   identityType: identityTypeSchema.optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
@@ -219,7 +234,7 @@ export const payerUpdateRequestSchema = z.object({
 });
 
 export const spgEmployeeInputSchema = z.object({
-  employeeIdentityNo: z.string().min(3),
+  employeeIdentityNo: z.string().trim().min(3).max(30),
   employeeName: z.string().min(1),
   employeeEmail: z.string().email().optional(),
   employeePhone: z.string().optional(),
@@ -233,7 +248,7 @@ export const spgEmployeeImportSchema = z.object({
 
 export const spgPayrollLineInputSchema = z.object({
   employeeName: z.string().trim().min(1),
-  employeeIdentityNo: z.string().trim().min(3),
+  employeeIdentityNo: z.string().trim().min(3).max(30),
   amount: z.number().positive(),
 });
 
@@ -295,7 +310,7 @@ export const individualDirectoryQuerySchema = z.object({
 
 export const guestPaymentCreateSchema = z.object({
   guestName: z.string().min(1),
-  identityNo: z.string().min(3),
+  identityNo: z.string().trim().min(3).max(30),
   email: z.string().email().optional(),
   amount: z.number().positive(),
   paymentMethod: z.string().min(1),
@@ -303,7 +318,7 @@ export const guestPaymentCreateSchema = z.object({
 });
 
 export const corporateZakatPaymentSchema = z.object({
-  ssmNo: z.string().min(1),
+  ssmNo: z.string().trim().min(1).max(30),
   companyName: z.string().min(1),
   contactEmail: z.string().email().optional(),
   amount: z.number().positive(),
@@ -351,33 +366,10 @@ export const paymentGatewaysSchema = z.object({
   ).default([]),
 });
 
-export const sourceCategoriesSchema = z.object({
-  categories: z.array(
-    z.object({
-      code: z.string().trim().min(1),
-      name: z.string().trim().min(1),
-      isActive: z.boolean().default(true),
-      notes: z.string().optional(),
-    }),
-  ).default([]),
-});
-
-export const sourceDataSchema = z.object({
-  items: z.array(
-    z.object({
-      code: z.string().trim().min(1),
-      name: z.string().trim().min(1),
-      categoryCode: z.string().trim().min(1),
-      isActive: z.boolean().default(true),
-      notes: z.string().optional(),
-    }),
-  ).default([]),
-});
-
 export const counterPaymentCreateSchema = z
   .object({
     guestName: z.string().trim().min(1),
-    identityNo: z.string().trim().min(3),
+    identityNo: z.string().trim().min(3).max(30),
     email: z.string().email().optional(),
     phone: z.string().trim().optional(),
     zakatType: z.string().trim().min(1),
@@ -451,6 +443,41 @@ export const reconciliationCasesQuerySchema = z.object({
   status: reconciliationCaseStatusSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(20),
+});
+
+export const counterSpgBatchCreateSchema = z.object({
+  employerPayerId: z.number().int().positive(),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2000).max(2200),
+  paymentChannel: z.enum(["COUNTER_CASH", "CHEQUE", "FPX_B2B", "CARD"]),
+  collectionPoint: z.string().trim().min(1).max(120),
+  rows: z.array(spgPayrollLineInputSchema).min(1).max(200),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export const scheduledPaymentFrequencySchema = z.enum(["monthly", "quarterly", "yearly"]);
+export const scheduledPaymentStatusSchema = z.enum(["active", "paused", "completed", "cancelled", "failed"]);
+
+export const scheduledPaymentCreateSchema = z.object({
+  payerName: z.string().trim().min(1),
+  identityNo: z.string().trim().min(3).max(30),
+  email: z.string().email().optional(),
+  zakatType: z.string().trim().min(1),
+  financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
+  amountPerInstalment: z.number().positive(),
+  totalInstalments: z.number().int().min(2).max(120),
+  frequency: scheduledPaymentFrequencySchema,
+  cardLast4: z.string().length(4).regex(/^\d{4}$/),
+  cardBrand: z.enum(["VISA", "MASTERCARD"]),
+  source: z.enum(["ONLINE_GUEST", "COUNTER_COLLECTION", "CORPORATE_DIRECT"]).default("ONLINE_GUEST"),
+  collectionPoint: z.string().trim().optional(),
+});
+
+export const scheduledPaymentsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: scheduledPaymentStatusSchema.optional(),
+  q: z.string().trim().optional(),
 });
 
 export const reconciliationResolveSchema = z.object({

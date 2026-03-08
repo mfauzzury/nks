@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BarChart3,
   Braces,
+  CalendarClock,
   FileUp,
   Layers,
   Plug,
@@ -78,6 +79,16 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         children: [
           { label: "Senarai", to: "/payers/corporate/list" },
           { label: "Daftar Baru", to: "/payers/corporate/new" },
+        ],
+      },
+      {
+        id: "account-merge",
+        label: "Account Merge",
+        to: "/reconciliation/account-merge",
+        icon: Users,
+        children: [
+          { label: "Queue", to: "/reconciliation/account-merge/queue" },
+          { label: "Detection & Merge", to: "/reconciliation/account-merge" },
         ],
       },
     ],
@@ -226,6 +237,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
       { id: "counter-payments", label: "Senarai Kutipan", to: "/counter/payments", icon: Wallet },
       { id: "counter-deposits", label: "Konsolidasi Bank-In", to: "/counter/deposits", icon: Wallet },
       { id: "counter-reconciliation", label: "Rekonsiliasi Bank", to: "/counter/reconciliation", icon: Wallet },
+      { id: "scheduled-payments", label: "Penjadualan Bayaran", to: "/scheduled-payments", icon: CalendarClock },
     ],
   },
   {

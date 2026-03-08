@@ -101,3 +101,4 @@ postsRouter.delete("/:id", async (req, res) => {
   await prisma.post.delete({ where: { id } }).catch(() => null);
   return sendOk(res, { success: true });
 });
+

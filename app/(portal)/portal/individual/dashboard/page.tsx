@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, FileText, PieChart as PieChartIcon, UserRound } from "lucide-react";
+import { Building2, CreditCard, FileText, PieChart as PieChartIcon, UserRound } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { PortalActionTiles } from "@/components/portal/PortalActionTiles";
 import { PortalAuthGuard } from "@/components/portal/PortalAuthGuard";
 import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { usePortalSession } from "@/lib/use-portal-session";
-import { getTransactionsByIdentity, type IdentityTransactionsResult } from "@/lib/payer-portal-api";
+import { getTransactionsByIdentity, getSpgAgreementByIdentity, type IdentityTransactionsResult, type SpgAgreementResult } from "@/lib/payer-portal-api";
 
 type Tx = IdentityTransactionsResult["data"]["transactions"][number];
 
@@ -33,6 +33,7 @@ export default function IndividualDashboardPage() {
   const [loading, setLoading] = useState(Boolean(identityNo));
   const [rows, setRows] = useState<Tx[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [spgData, setSpgData] = useState<SpgAgreementResult["data"] | null>(null);
 
   useEffect(() => {
     if (!identityNo) return;
@@ -43,6 +44,9 @@ export default function IndividualDashboardPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    getSpgAgreementByIdentity(identityNo)
+      .then((res) => setSpgData(res.data))
+      .catch(() => {});
   }, [identityNo]);
 
   const chartData = useMemo(() => {
@@ -111,6 +115,55 @@ export default function IndividualDashboardPage() {
               <p className="mt-1 text-sm text-purple-200/70">Akaun boleh digunakan</p>
             </article>
           </section>
+
+          {spgData && spgData.agreements.length > 0 && (
+            <section className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md space-y-4">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4.5 w-4.5 text-purple-200" />
+                <h2 className="text-sm font-semibold text-white">Potongan Gaji (SPG)</h2>
+              </div>
+              {spgData.agreements.map((a, i) => (
+                <div key={i} className="rounded-xl bg-white/10 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-white">{a.employerName}</p>
+                    {a.employmentStatus && (
+                      <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-medium text-purple-100">{a.employmentStatus}</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <div className="text-purple-200/70">Amaun Potongan Bulanan</div>
+                    <div className="font-semibold text-yellow-300 text-base">{a.deductionAmount != null ? formatCurrency(a.deductionAmount) : "Belum ditetapkan"}</div>
+                    <div className="text-purple-200/70">No. Perjanjian</div>
+                    <div className="text-white">{a.agreementNo || "-"}</div>
+                    <div className="text-purple-200/70">Berkuatkuasa</div>
+                    <div className="text-white">{a.agreementEffectiveDate ? formatDate(a.agreementEffectiveDate) : "-"}</div>
+                    <div className="text-purple-200/70">Tarikh Tamat</div>
+                    <div className="text-white">{a.agreementExpiryDate ? formatDate(a.agreementExpiryDate) : "-"}</div>
+                  </div>
+                </div>
+              ))}
+              {spgData.deductionHistory.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <h3 className="text-xs font-semibold text-purple-200">Sejarah Potongan Gaji</h3>
+                  {spgData.deductionHistory.slice(0, 10).map((d, i) => {
+                    const monthNames = ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis"];
+                    return (
+                      <div key={i} className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2.5">
+                        <div>
+                          <p className="text-sm font-medium text-white">{d.employerName}</p>
+                          <p className="text-xs text-purple-200/70">{d.batchReferenceNo} &middot; {monthNames[d.periodMonth - 1] || d.periodMonth} {d.periodYear}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-white">{formatCurrency(d.amount)}</p>
+                          {d.paidAt && <p className="text-[10px] text-purple-200/50">{formatDate(d.paidAt)}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="grid gap-4 md:grid-cols-2">
             <article className="rounded-2xl border border-white/20 bg-white/12 p-5 backdrop-blur-md">

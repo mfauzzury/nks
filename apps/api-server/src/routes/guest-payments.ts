@@ -130,7 +130,8 @@ guestPaymentsRouter.get("/:id", async (req, res) => {
       status: "success",
     },
   });
-  const existingPayer = await detectExistingIndividualAccount(row.identityNo);
+  const isCorporate = row.source === "CORPORATE_DIRECT";
+  const existingPayer = isCorporate ? null : await detectExistingIndividualAccount(row.identityNo);
 
   return sendOk(res, {
     id: row.id,
@@ -141,8 +142,9 @@ guestPaymentsRouter.get("/:id", async (req, res) => {
     amount: row.amount.toString(),
     paymentMethod: row.paymentMethod,
     status: row.status,
+    source: row.source,
     paidAt: row.paidAt.toISOString(),
-    previousTransactionCount: previousCount,
+    previousTransactionCount: isCorporate ? 0 : previousCount,
     hasExistingIndividualAccount: Boolean(existingPayer),
     existingPayer: existingPayer
       ? {

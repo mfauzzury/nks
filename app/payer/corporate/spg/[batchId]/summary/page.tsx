@@ -16,6 +16,21 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("ms-MY", { style: "currency", currency: "MYR" }).format(value);
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  draft_preview: "Draf",
+  awaiting_online_payment: "Menunggu Bayaran Online",
+  pending_payment: "Pembayaran Sedang Disahkan",
+  paid_success: "Bayaran Berjaya",
+  paid_failed: "Bayaran Gagal",
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  FPX_B2B: "FPX Online",
+  CARD: "Debit/Credit Card",
+  CHEQUE: "Cek",
+  COUNTER_CASH: "Tunai / Kaunter",
+};
+
 export default function SpgBatchSummaryPage() {
   const params = useParams<{ batchId: string }>();
   const router = useRouter();
@@ -93,13 +108,13 @@ export default function SpgBatchSummaryPage() {
                 <CardTitle className="text-base">Maklumat Batch</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-                <p><span className="font-medium">Reference No:</span> {batch.referenceNo}</p>
-                <p><span className="font-medium">Status:</span> {batch.status}</p>
-                <p><span className="font-medium">Period:</span> {String(batch.month).padStart(2, "0")}/{batch.year}</p>
-                <p><span className="font-medium">Channel:</span> {batch.paymentChannel}</p>
-                <p><span className="font-medium">Rows:</span> {batch.rowCount}</p>
-                <p><span className="font-medium">Total:</span> {formatCurrency(totalAmount)}</p>
-                {batch.officialReceiptNo ? <p><span className="font-medium">Receipt:</span> {batch.officialReceiptNo}</p> : null}
+                <p><span className="font-medium">No. Rujukan:</span> {batch.referenceNo}</p>
+                <p><span className="font-medium">Status:</span> {STATUS_LABELS[batch.status] || batch.status}</p>
+                <p><span className="font-medium">Tempoh:</span> {String(batch.month).padStart(2, "0")}/{batch.year}</p>
+                <p><span className="font-medium">Kaedah Bayaran:</span> {CHANNEL_LABELS[batch.paymentChannel] || batch.paymentChannel}</p>
+                <p><span className="font-medium">Bil. Pekerja:</span> {batch.rowCount}</p>
+                <p><span className="font-medium">Jumlah:</span> {formatCurrency(totalAmount)}</p>
+                {batch.officialReceiptNo ? <p><span className="font-medium">No. Resit:</span> {batch.officialReceiptNo}</p> : null}
               </CardContent>
             </Card>
 
@@ -107,8 +122,8 @@ export default function SpgBatchSummaryPage() {
               <Card className="border-amber-200 bg-amber-50">
                 <CardContent className="space-y-3 p-5">
                   <p className="text-sm text-amber-900">
-                    Status batch ini adalah <span className="font-semibold">Pending Payment</span>. Ini hanya reference slip,
-                    bukan resit rasmi.
+                    Status batch ini adalah <span className="font-semibold">Pembayaran Sedang Disahkan</span>. Pihak pentadbir akan mengesahkan bayaran anda.
+                    Dokumen ini hanya rujukan sementara, bukan resit rasmi.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -124,11 +139,16 @@ export default function SpgBatchSummaryPage() {
                           totalAmount,
                           rowCount: batch.rowCount,
                           status: batch.status,
+                          lines: batch.lines.map((l) => ({
+                            employeeName: l.employeeName,
+                            employeeIdentityNo: l.employeeIdentityNo,
+                            amount: Number(l.amount),
+                          })),
                         })
                       }
                     >
                       <Download className="h-4 w-4" />
-                      Muat Turun Reference PDF
+                      Muat Turun Slip Rujukan
                     </Button>
                     <Button variant="outline" className="gap-2" onClick={() => window.print()}>
                       <Printer className="h-4 w-4" />
@@ -140,19 +160,20 @@ export default function SpgBatchSummaryPage() {
             ) : null}
 
             {batch.status === "awaiting_online_payment" ? (
-              <Card className="border-purple-200 bg-purple-50">
+              <Card className="border-blue-200 bg-blue-50">
                 <CardContent className="space-y-3 p-5">
-                  <p className="text-sm text-purple-900">
-                    Menunggu bayaran online. Untuk fasa ini, gunakan simulasi callback.
+                  <p className="text-sm text-blue-900">
+                    Menunggu pengesahan bayaran online. Sila selesaikan bayaran melalui gateway pembayaran.
                   </p>
+                  <p className="text-xs text-blue-700">Simulasi pembayaran (pembangunan sahaja):</p>
                   <div className="flex flex-wrap gap-2">
                     <Button className="gap-2" onClick={() => onSimulate("success")}>
                       <CheckCircle2 className="h-4 w-4" />
-                      Simulate Success
+                      Bayaran Berjaya
                     </Button>
                     <Button variant="outline" className="gap-2" onClick={() => onSimulate("failed")}>
                       <AlertCircle className="h-4 w-4" />
-                      Simulate Failed
+                      Bayaran Gagal
                     </Button>
                   </div>
                 </CardContent>
@@ -163,11 +184,24 @@ export default function SpgBatchSummaryPage() {
               <Card className="border-emerald-200 bg-emerald-50">
                 <CardContent className="space-y-3 p-5">
                   <p className="text-sm text-emerald-900">
-                    Bayaran berjaya. Resit rasmi telah dijana.
+                    Bayaran berjaya disahkan. Resit rasmi telah dijana.
                   </p>
                   <Link href={`/payer/corporate/spg/${batchId}/receipt`}>
-                    <Button>Lihat Resit Rasmi</Button>
+                    <Button className="gap-2">
+                      <Download className="h-4 w-4" />
+                      Lihat Resit Rasmi
+                    </Button>
                   </Link>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {batch.status === "paid_failed" ? (
+              <Card className="border-red-200 bg-red-50">
+                <CardContent className="p-5">
+                  <p className="text-sm text-red-900">
+                    Bayaran gagal atau ditolak. Sila hubungi pentadbir untuk maklumat lanjut.
+                  </p>
                 </CardContent>
               </Card>
             ) : null}
@@ -182,9 +216,9 @@ export default function SpgBatchSummaryPage() {
                     <thead>
                       <tr className="border-b border-slate-200 text-left">
                         <th className="px-3 py-2 text-xs uppercase text-slate-500">#</th>
-                        <th className="px-3 py-2 text-xs uppercase text-slate-500">Name</th>
-                        <th className="px-3 py-2 text-xs uppercase text-slate-500">IC</th>
-                        <th className="px-3 py-2 text-right text-xs uppercase text-slate-500">Amount</th>
+                        <th className="px-3 py-2 text-xs uppercase text-slate-500">Nama</th>
+                        <th className="px-3 py-2 text-xs uppercase text-slate-500">No. IC</th>
+                        <th className="px-3 py-2 text-right text-xs uppercase text-slate-500">Amaun (RM)</th>
                       </tr>
                     </thead>
                     <tbody>

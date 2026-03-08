@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   Tag,
@@ -16,11 +16,37 @@ import type { Category } from "@/types";
 const router = useRouter();
 const rows = ref<Category[]>([]);
 const q = ref("");
+const page = ref(1);
+const limit = ref(20);
+const total = ref(0);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
+const fromRow = computed(() => (total.value === 0 ? 0 : (page.value - 1) * limit.value + 1));
+const toRow = computed(() => Math.min(total.value, page.value * limit.value));
 
 async function load() {
-  const params = new URLSearchParams({ page: "1", limit: "50", ...(q.value ? { q: q.value } : {}) });
+  const params = new URLSearchParams({ page: String(page.value), limit: String(limit.value), ...(q.value ? { q: q.value } : {}) });
   const response = await listCategories(`?${params.toString()}`);
   rows.value = response.data;
+  const meta = (response.meta || {}) as { total?: number };
+  total.value = Number(meta.total || 0);
+}
+
+async function search() {
+  page.value = 1;
+  await load();
+}
+
+async function prevPage() {
+  if (page.value <= 1) return;
+  page.value -= 1;
+  await load();
+}
+
+async function nextPage() {
+  if (page.value >= totalPages.value) return;
+  page.value += 1;
+  await load();
 }
 
 async function remove(id: number) {
@@ -62,10 +88,10 @@ onMounted(load);
                   v-model="q"
                   placeholder="Search categories..."
                   class="w-56 rounded-lg border border-slate-300 py-1.5 pl-9 pr-3 text-sm shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-                  @keyup.enter="load"
+                  @keyup.enter="search"
                 />
               </div>
-              <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50" @click="load">Filter</button>
+              <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50" @click="search">Filter</button>
             </div>
           </div>
         </div>
@@ -112,6 +138,14 @@ onMounted(load);
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 px-4 py-2.5">
+          <p class="text-xs text-slate-500">Showing {{ fromRow }}-{{ toRow }} of {{ total }} categories</p>
+          <div class="flex items-center gap-1.5">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page <= 1" @click="prevPage">Previous</button>
+            <span class="px-2 text-xs text-slate-500">Page {{ page }} / {{ totalPages }}</span>
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50" :disabled="page >= totalPages" @click="nextPage">Next</button>
+          </div>
         </div>
       </article>
     </div>

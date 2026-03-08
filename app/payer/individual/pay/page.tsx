@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, AlertCircle, ShieldCheck, Sparkles, Wallet } from "lucide-react";
-import { createGuestPayment, getPublicZakatTypes, type PublicZakatType } from "@/lib/payer-portal-api";
+import { CreditCard, AlertCircle, ShieldCheck, Sparkles, Wallet, CalendarClock } from "lucide-react";
+import { createGuestPayment, createScheduledPayment, getPublicZakatTypes, type PublicZakatType } from "@/lib/payer-portal-api";
 import { usePortalSession } from "@/lib/use-portal-session";
 import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -37,6 +37,15 @@ export default function IndividualPayPage() {
   const [error, setError] = useState("");
   const [zakatTypes, setZakatTypes] = useState<PublicZakatType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
+  const [selectedZakatType, setSelectedZakatType] = useState("");
+  const [amountInput, setAmountInput] = useState("");
+  const [fidyahDays, setFidyahDays] = useState("1");
+  const [fidyahYears, setFidyahYears] = useState("1");
+  const [paymentMode, setPaymentMode] = useState<"sekali" | "berjadual">("sekali");
+  const [scheduleFrequency, setScheduleFrequency] = useState<"monthly" | "quarterly" | "yearly">("monthly");
+  const [scheduleTotalInstalments, setScheduleTotalInstalments] = useState("12");
+  const [cardLast4, setCardLast4] = useState("");
+  const [cardBrand, setCardBrand] = useState<"VISA" | "MASTERCARD">("VISA");
   const currentYear = new Date().getFullYear();
 
   const activeTypes = useMemo(
@@ -47,6 +56,32 @@ export default function IndividualPayPage() {
     () => Array.from({ length: 11 }, (_, idx) => String(currentYear - idx)),
     [currentYear],
   );
+  const isFidyah = useMemo(
+    () => selectedZakatType.toLowerCase().includes("fidyah"),
+    [selectedZakatType],
+  );
+  const calculatedTotalAmount = useMemo(() => {
+    const base = Number(amountInput);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    if (!isFidyah) return base;
+    const days = Number(fidyahDays);
+    const years = Number(fidyahYears);
+    if (!Number.isFinite(days) || !Number.isFinite(years) || days <= 0 || years <= 0) return 0;
+    return base * days * years;
+  }, [amountInput, fidyahDays, fidyahYears, isFidyah]);
+  function adjustFidyahDays(delta: number) {
+    setFidyahDays((prev) => {
+      const next = (Number(prev) || 1) + delta;
+      return String(Math.min(365, Math.max(1, next)));
+    });
+  }
+
+  function adjustFidyahYears(delta: number) {
+    setFidyahYears((prev) => {
+      const next = (Number(prev) || 1) + delta;
+      return String(Math.min(100, Math.max(1, next)));
+    });
+  }
 
   useEffect(() => {
     async function loadTypes() {
@@ -68,21 +103,64 @@ export default function IndividualPayPage() {
     setLoading(true);
     setError("");
     const form = new FormData(e.currentTarget);
+    const amountToSubmit = isFidyah ? calculatedTotalAmount : Number(form.get("amount"));
 
     try {
+      if (isFidyah) {
+        const days = Number(fidyahDays);
+        const years = Number(fidyahYears);
+        if (!Number.isFinite(days) || days <= 0 || !Number.isFinite(years) || years <= 0 || amountToSubmit <= 0) {
+          setError("Sila isi maklumat kalkulator fidyah dengan betul.");
+          setLoading(false);
+          return;
+        }
+      }
+
       const identityNo = isLoggedInIndividual ? String(session?.identityNo || "") : String(form.get("identityNo") || "");
       const guestName = isLoggedInIndividual ? String(session?.displayName || "") : String(form.get("guestName") || "");
       const email = isLoggedInIndividual ? String(session?.email || "") : String(form.get("email") || "");
+      const financialYear = String(form.get("financialYear") || currentYear);
 
-      const response = await createGuestPayment({
-        guestName,
-        identityNo,
-        email,
-        amount: Number(form.get("amount")),
-        paymentMethod: `${String(form.get("paymentMethod") || "")} | ${String(form.get("zakatType") || "")}`,
-        financialYear: String(form.get("financialYear") || currentYear),
-      });
-      router.push(`/payer/individual/pay/success?receiptId=${response.data.id}`);
+      if (paymentMode === "berjadual") {
+        if (!cardLast4 || cardLast4.length !== 4) {
+          setError("Sila masukkan 4 digit terakhir kad anda.");
+          setLoading(false);
+          return;
+        }
+        const totalInst = Number(scheduleTotalInstalments);
+        if (!Number.isFinite(totalInst) || totalInst < 2) {
+          setError("Bilangan ansuran mestilah sekurang-kurangnya 2.");
+          setLoading(false);
+          return;
+        }
+        const response = await createScheduledPayment({
+          payerName: guestName,
+          identityNo,
+          email: email || undefined,
+          zakatType: selectedZakatType,
+          financialYear,
+          amountPerInstalment: amountToSubmit,
+          totalInstalments: totalInst,
+          frequency: scheduleFrequency,
+          cardLast4,
+          cardBrand,
+        });
+        router.push(`/payer/individual/pay/success?receiptId=${response.data.firstPayment.id}&type=scheduled&scheduleRef=${response.data.scheduleRef}`);
+      } else {
+        const paymentMethod = isFidyah
+          ? `${String(form.get("paymentMethod") || "")} | ${selectedZakatType} | Fidyah ${fidyahDays} hari x ${fidyahYears} tahun`
+          : `${String(form.get("paymentMethod") || "")} | ${selectedZakatType}`;
+
+        const response = await createGuestPayment({
+          guestName,
+          identityNo,
+          email,
+          amount: amountToSubmit,
+          paymentMethod,
+          financialYear,
+        });
+        router.push(`/payer/individual/pay/success?receiptId=${response.data.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ralat semasa membuat bayaran");
     } finally {
@@ -159,7 +237,8 @@ export default function IndividualPayPage() {
                   required
                   className="flex h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-base shadow-xs"
                   disabled={loadingTypes}
-                  defaultValue=""
+                  value={selectedZakatType}
+                  onChange={(e) => setSelectedZakatType(e.target.value)}
                 >
                   <option value="" disabled>
                     {loadingTypes ? "Memuatkan jenis zakat..." : "Sila pilih jenis zakat"}
@@ -185,9 +264,66 @@ export default function IndividualPayPage() {
                   ))}
                 </select>
               </div>
+              {isFidyah ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="fidyahDays">Bilangan Hari Tinggal Puasa *</Label>
+                    <div className="flex h-11 items-center rounded-lg border-2 border-slate-400 bg-white shadow-xs">
+                      <button type="button" className="h-full px-4 text-lg font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700" onClick={() => adjustFidyahDays(-1)}>-</button>
+                      <input
+                        id="fidyahDays"
+                        name="fidyahDays"
+                        type="number"
+                        min="1"
+                        max="365"
+                        required={isFidyah}
+                        value={fidyahDays}
+                        onChange={(e) => setFidyahDays(e.target.value)}
+                        className="h-full w-full border-0 text-center text-base font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button type="button" className="h-full px-4 text-lg font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700" onClick={() => adjustFidyahDays(1)}>+</button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fidyahYears">Tahun Gandaan *</Label>
+                    <div className="flex h-11 items-center rounded-lg border-2 border-slate-400 bg-white shadow-xs">
+                      <button type="button" className="h-full px-4 text-lg font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700" onClick={() => adjustFidyahYears(-1)}>-</button>
+                      <input
+                        id="fidyahYears"
+                        name="fidyahYears"
+                        type="number"
+                        min="1"
+                        max="100"
+                        required={isFidyah}
+                        value={fidyahYears}
+                        onChange={(e) => setFidyahYears(e.target.value)}
+                        className="h-full w-full border-0 text-center text-base font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button type="button" className="h-full px-4 text-lg font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700" onClick={() => adjustFidyahYears(1)}>+</button>
+                    </div>
+                  </div>
+                </>
+              ) : null}
               <div className="space-y-2">
-                <Label htmlFor="amount">Jumlah (RM) *</Label>
-                <Input id="amount" name="amount" type="number" step="0.01" min="0.01" required placeholder="0.00" className="bg-white text-right" />
+                <Label htmlFor="amount">{isFidyah ? "Kadar Fidyah (RM / hari) *" : "Jumlah (RM) *"}</Label>
+                <Input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  placeholder="0.00"
+                  className="bg-white text-right"
+                  value={amountInput}
+                  onChange={(e) => setAmountInput(e.target.value)}
+                />
+                {isFidyah ? (
+                  <p className="mt-1 text-sm text-slate-600">
+                    Formula: hari x tahun x kadar sehari. Jumlah bayaran:
+                    <span className="ml-1 text-lg font-bold text-slate-900">RM {calculatedTotalAmount.toFixed(2)}</span>
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Kaedah bayaran</Label>
@@ -200,9 +336,120 @@ export default function IndividualPayPage() {
             </CardContent>
           </Card>
 
+          <Card className="border-white/20 portal-card shadow-md">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarClock className="h-4 w-4" />
+                Mod Bayaran
+              </CardTitle>
+              <CardDescription>Pilih bayaran sekali atau bayaran berjadual (ansuran).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("sekali")}
+                  className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-semibold transition ${paymentMode === "sekali" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  Bayaran Sekali
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("berjadual")}
+                  className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-semibold transition ${paymentMode === "berjadual" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  Bayaran Berjadual
+                </button>
+              </div>
+
+              {paymentMode === "berjadual" && (
+                <div className="space-y-4 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Kekerapan *</Label>
+                      <select
+                        value={scheduleFrequency}
+                        onChange={(e) => setScheduleFrequency(e.target.value as "monthly" | "quarterly" | "yearly")}
+                        className="flex h-11 w-full rounded-lg border-2 border-slate-400 bg-white px-4 py-2 text-base shadow-xs"
+                      >
+                        <option value="monthly">Bulanan</option>
+                        <option value="quarterly">Suku Tahunan (3 bulan)</option>
+                        <option value="yearly">Tahunan</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Bilangan Ansuran *</Label>
+                      <div className="flex h-11 items-center rounded-lg border-2 border-slate-400 bg-white shadow-xs">
+                        <button
+                          type="button"
+                          className="h-full px-4 text-lg font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                          onClick={() => setScheduleTotalInstalments((prev) => String(Math.max(2, (Number(prev) || 2) - 1)))}
+                        >-</button>
+                        <input
+                          type="number"
+                          min="2"
+                          max="120"
+                          value={scheduleTotalInstalments}
+                          onChange={(e) => setScheduleTotalInstalments(e.target.value)}
+                          className="h-full w-full border-0 text-center text-base font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          className="h-full px-4 text-lg font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                          onClick={() => setScheduleTotalInstalments((prev) => String(Math.min(120, (Number(prev) || 2) + 1)))}
+                        >+</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Jenama Kad *</Label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCardBrand("VISA")}
+                          className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition ${cardBrand === "VISA" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600"}`}
+                        >VISA</button>
+                        <button
+                          type="button"
+                          onClick={() => setCardBrand("MASTERCARD")}
+                          className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition ${cardBrand === "MASTERCARD" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-300 bg-white text-slate-600"}`}
+                        >MASTERCARD</button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cardLast4">4 Digit Terakhir Kad *</Label>
+                      <Input
+                        id="cardLast4"
+                        maxLength={4}
+                        pattern="\d{4}"
+                        placeholder="1234"
+                        className="bg-white text-center tracking-widest"
+                        value={cardLast4}
+                        onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      />
+                    </div>
+                  </div>
+
+                  {calculatedTotalAmount > 0 && Number(scheduleTotalInstalments) >= 2 && (
+                    <div className="rounded-lg bg-white border border-blue-200 p-3 text-sm">
+                      <p className="text-slate-700">
+                        Ringkasan: <span className="font-bold text-blue-700">RM {calculatedTotalAmount.toFixed(2)}</span> x{" "}
+                        <span className="font-bold">{scheduleTotalInstalments}</span> ansuran ={" "}
+                        <span className="font-bold text-emerald-700">RM {(calculatedTotalAmount * Number(scheduleTotalInstalments)).toFixed(2)}</span>
+                        {" "}({scheduleFrequency === "monthly" ? "bulanan" : scheduleFrequency === "quarterly" ? "suku tahunan" : "tahunan"})
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex items-center justify-end gap-3">
             <Button type="submit" disabled={loading} className="h-12 rounded-xl portal-btn-primary px-8 text-base font-semibold shadow-lg ">
-              {loading ? "Memproses..." : "Buat Bayaran"}
+              {loading ? "Memproses..." : paymentMode === "berjadual" ? "Mulakan Bayaran Berjadual" : "Buat Bayaran"}
             </Button>
           </div>
         </form>

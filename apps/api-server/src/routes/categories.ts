@@ -92,3 +92,4 @@ categoriesRouter.delete("/:id", async (req, res) => {
   await prisma.category.delete({ where: { id } }).catch(() => null);
   return sendOk(res, { success: true });
 });
+

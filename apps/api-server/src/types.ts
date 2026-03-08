@@ -50,6 +50,7 @@ export type SettingsPayload = {
   metaDescription: string;
   siteIconUrl: string;
   sidebarLogoUrl: string;
+  portalLogoUrl: string;
   faviconUrl: string;
   language: string;
   timezone: string;

@@ -5,6 +5,54 @@ export type ApiError = { error: { code: string; message: string; details?: unkno
 
 export type ApiResponse<T> = { data: T; meta?: Record<string, unknown> };
 
+export type DatabaseSchemaColumn = {
+  name: string;
+  type: string;
+  nullable: boolean;
+  default: string | null;
+  extra: string;
+  key: string;
+  comment: string | null;
+};
+
+export type DatabaseSchemaForeignKey = {
+  name: string;
+  column: string;
+  referencesTable: string;
+  referencesColumn: string;
+  onUpdate: string;
+  onDelete: string;
+};
+
+export type DatabaseSchemaTable = {
+  name: string;
+  comment: string | null;
+  engine: string | null;
+  rowFormat: string | null;
+  columnCount: number;
+  primaryKey: string[];
+  columns: DatabaseSchemaColumn[];
+  foreignKeys: DatabaseSchemaForeignKey[];
+};
+
+export type DatabaseSchemaRelationship = {
+  sourceTable: string;
+  sourceColumn: string;
+  targetTable: string;
+  targetColumn: string;
+  constraintName: string;
+  onUpdateRule: string;
+  onDeleteRule: string;
+};
+
+export type DatabaseSchemaPayload = {
+  database: string | null;
+  tableCount: number;
+  relationshipCount: number;
+  tables: DatabaseSchemaTable[];
+  relationships: DatabaseSchemaRelationship[];
+};
+
 export type User = {
   id: number;
   email: string;
@@ -98,6 +146,7 @@ export type SettingsPayload = {
   metaDescription: string;
   siteIconUrl: string;
   sidebarLogoUrl: string;
+  portalLogoUrl: string;
   faviconUrl: string;
   language: string;
   timezone: string;
