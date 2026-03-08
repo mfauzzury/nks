@@ -14,3 +14,7 @@ apps/api-server/uploads/*
 
 apps/*/dist
 *.tsbuildinfo
+
+# Ensure Docker files are always tracked (override any global ignore)
+!dockerfile
+!.dockerignore

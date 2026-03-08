@@ -22,7 +22,9 @@
     "lint": "eslint",
     "db:generate": "npm run db:generate -w apps/api-server",
     "db:push": "npm run db:push -w apps/api-server",
-    "db:seed": "npm run db:seed -w apps/api-server"
+    "db:seed": "npm run db:seed -w apps/api-server",
+    "db:studio": "npm run db:studio -w apps/api-server",
+    "generate:jan-sample": "npm run generate:jan-sample -w apps/api-server"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

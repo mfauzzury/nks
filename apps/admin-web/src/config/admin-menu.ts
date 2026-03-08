@@ -1,7 +1,13 @@
 import type { Component } from "vue";
 import {
+  AlertTriangle,
+  BarChart3,
   Braces,
   CalendarClock,
+  FileUp,
+  Layers,
+  Plug,
+  RefreshCw,
   Users,
   Database,
   FileText,
@@ -24,6 +30,8 @@ export type MenuItemDef = {
   to: string;
   icon: Component;
   children?: MenuChild[];
+  /** Required permission to see this item. Omit = visible to all authenticated users. */
+  permission?: string;
 };
 
 export type MenuGroupDef = {
@@ -56,6 +64,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Individu",
         to: "/payers/individual/list",
         icon: Users,
+        permission: "users.view",
         children: [
           { label: "Senarai", to: "/payers/individual/list" },
           { label: "Daftar Baru", to: "/payers/individual/new" },
@@ -66,6 +75,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Korporat/Syarikat",
         to: "/payers/corporate/list",
         icon: Users,
+        permission: "users.view",
         children: [
           { label: "Senarai", to: "/payers/corporate/list" },
           { label: "Daftar Baru", to: "/payers/corporate/new" },
@@ -92,6 +102,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Majikan SPG",
         to: "/payers/spg/list",
         icon: Users,
+        permission: "users.view",
         children: [
           { label: "Senarai", to: "/payers/spg/list" },
           { label: "Daftar Baru", to: "/payers/spg/new" },
@@ -109,12 +120,13 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     id: "portal",
     label: "Portal",
     items: [
-      { id: "dashboard", label: "Portal Dashboard", to: "/portal/dashboard", icon: Gauge },
+      { id: "dashboard", label: "Portal Dashboard", to: "/portal/dashboard", icon: Gauge, permission: "posts.view" },
       {
         id: "duplicates",
         label: "Duplicate Cases",
         to: "/duplicates",
         icon: Users,
+        permission: "posts.view",
         children: [{ label: "Case List", to: "/duplicates" }],
       },
       {
@@ -122,6 +134,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Posts",
         to: "/posts",
         icon: FileText,
+        permission: "posts.view",
         children: [
           { label: "All Posts", to: "/posts" },
           { label: "Add New", to: "/posts/new" },
@@ -133,6 +146,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Pages",
         to: "/pages",
         icon: FileText,
+        permission: "pages.view",
         children: [
           { label: "All Pages", to: "/pages" },
           { label: "Add New", to: "/pages/new" },
@@ -143,6 +157,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Media",
         to: "/media",
         icon: Image,
+        permission: "media.view",
         children: [{ label: "Library", to: "/media" }],
       },
     ],
@@ -151,12 +166,13 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     id: "administration",
     label: "Administration",
     items: [
-      { id: "menus", label: "Menus", to: "/menus", icon: Menu },
+      { id: "menus", label: "Menus", to: "/menus", icon: Menu, permission: "menus.view" },
       {
         id: "settings",
         label: "Settings",
         to: "/settings",
         icon: Settings,
+        permission: "settings.view",
         children: [
           { label: "General", to: "/settings" },
           { label: "Users", to: "/settings/users" },
@@ -167,6 +183,58 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     ],
   },
   {
+    id: "integration-3rd-party",
+    label: "Integration 3rd Party",
+    items: [
+      {
+        id: "integration-overview",
+        label: "Overview",
+        to: "/integration/3rd-party",
+        icon: Plug,
+        permission: "integration.view",
+      },
+      {
+        id: "integration-file-upload",
+        label: "File Upload",
+        to: "/integration/3rd-party/file-upload",
+        icon: FileUp,
+        permission: "integration.upload",
+      },
+      {
+        id: "integration-batch-processing",
+        label: "Batch Processing",
+        to: "/integration/3rd-party/batch-processing",
+        icon: Layers,
+        permission: "integration.process",
+      },
+      {
+        id: "integration-reconciliation",
+        label: "Reconciliation",
+        to: "/integration/3rd-party/reconciliation",
+        icon: RefreshCw,
+        permission: "integration.reconcile",
+      },
+      {
+        id: "integration-exceptions",
+        label: "Exceptions",
+        to: "/integration/3rd-party/exceptions",
+        icon: AlertTriangle,
+        permission: "integration.exceptions",
+      },
+      {
+        id: "integration-reports",
+        label: "Reports",
+        to: "/integration/3rd-party/reports",
+        icon: BarChart3,
+        permission: "integration.reports",
+      },
+      {
+        id: "integration-amil",
+        label: "Amil",
+        to: "/integration/3rd-party/amil",
+        icon: Users,
+        permission: "integration.view",
+      },
     id: "kutipan-kaunter",
     label: "Kutipan Kaunter",
     items: [
@@ -185,12 +253,28 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         label: "Jenis Zakat",
         to: "/zakat-config/types",
         icon: FileText,
+        permission: "settings.view",
       },
       {
         id: "zakat-payment-gateways",
         label: "Gerbang Pembayaran",
         to: "/zakat-config/payment-gateways",
         icon: Settings,
+        permission: "settings.view",
+      },
+      {
+        id: "zakat-source-categories",
+        label: "Kategori Sumber",
+        to: "/zakat-config/source-categories",
+        icon: Layers,
+        permission: "settings.view",
+      },
+      {
+        id: "zakat-source-data",
+        label: "Sumber Data",
+        to: "/zakat-config/source-data",
+        icon: Database,
+        permission: "settings.view",
       },
     ],
   },
@@ -198,13 +282,14 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     id: "development",
     label: "Development",
     items: [
-      { id: "database-schema", label: "Database Schema", to: "/development/database-schema", icon: Database },
-      { id: "api-management", label: "API Management", to: "/development/api-management", icon: Braces },
+      { id: "database-schema", label: "Database Schema", to: "/development/database-schema", icon: Database, permission: "roles.view" },
+      { id: "api-management", label: "API Management", to: "/development/api-management", icon: Braces, permission: "roles.view" },
       {
         id: "kitchen-sink",
         label: "Kitchen Sink",
         to: "/kitchen-sink",
         icon: LayoutGrid,
+        permission: "roles.view",
         children: [
           { label: "Components", to: "/kitchen-sink" },
           { label: "Forms", to: "/kitchen-sink/forms" },

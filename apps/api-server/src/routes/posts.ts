@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+import pkg from "@prisma/client";
+const { Prisma } = pkg;
 import { Router } from "express";
 
 import { prisma } from "../prisma.js";
@@ -101,3 +102,4 @@ postsRouter.delete("/:id", async (req, res) => {
   await prisma.post.delete({ where: { id } }).catch(() => null);
   return sendOk(res, { success: true });
 });
+

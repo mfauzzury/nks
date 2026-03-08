@@ -473,6 +473,25 @@ export async function savePaymentGateways(gateways: PaymentGatewayConfig[]) {
   });
 }
 
+export async function getSourceCategories() {
+  return apiRequest<{ data: { categories: SourceCategoryConfig[] } }>("/api/settings/source-categories");
+}
+
+export async function saveSourceCategories(categories: SourceCategoryConfig[]) {
+  return apiRequest<{ data: { categories: SourceCategoryConfig[] } }>("/api/settings/source-categories", {
+    method: "PUT",
+    body: JSON.stringify({ categories }),
+  });
+}
+
+export async function getSourceData() {
+  return apiRequest<{ data: { items: SourceDataConfig[] } }>("/api/settings/source-data");
+}
+
+export async function saveSourceData(items: SourceDataConfig[]) {
+  return apiRequest<{ data: { items: SourceDataConfig[] } }>("/api/settings/source-data", {
+    method: "PUT",
+    body: JSON.stringify({ items }),
 // Counter + reconciliation
 export async function createCounterPayment(input: {
   guestName: string;

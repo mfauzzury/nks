@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+import pkg from "@prisma/client";
+const { Prisma } = pkg;
 import { Router } from "express";
 
 import { prisma } from "../prisma.js";
@@ -97,3 +98,4 @@ pagesRouter.delete("/:id", async (req, res) => {
   await prisma.page.delete({ where: { id } }).catch(() => null);
   return sendOk(res, { success: true });
 });
+
