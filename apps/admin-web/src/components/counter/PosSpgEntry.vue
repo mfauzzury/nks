@@ -101,7 +101,6 @@ async function handleFileUpload(event: Event) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
 
-    // Clear current rows
     rows.splice(0, rows.length);
 
     for (const raw of data) {

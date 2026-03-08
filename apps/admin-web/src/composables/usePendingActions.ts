@@ -28,7 +28,7 @@ async function fetchPendingCounts() {
   }
 
   try {
-    const dupRes = await listDuplicateCases("open");
+    const dupRes = await listDuplicateCases({ status: "open" });
     const openTotal = (dupRes.meta?.total as number) ?? dupRes.data?.length ?? 0;
     byId["duplicates"] = openTotal > 0;
     byRoute["/duplicates"] = openTotal > 0;

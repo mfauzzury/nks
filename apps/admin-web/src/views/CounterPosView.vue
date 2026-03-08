@@ -1,34 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, unref } from "vue";
-import {
-  Banknote,
-  Check,
-  ChevronRight,
-  CreditCard,
-  Landmark,
-  Printer,
-  QrCode,
-  ReceiptText,
-  RefreshCw,
-  Search,
-  UserPlus,
-  Wallet,
-  X,
-} from "lucide-vue-next";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, unref } from "vue";
+import { Check, X } from "lucide-vue-next";
 
-import { useAuthStore } from "@/stores/auth";
-import {
-  createCounterPayment,
-  getZakatTypes,
-  lookupPayerByIc,
-  quickRegisterPayer,
-} from "@/api/cms";
-import type { CounterPaymentChannel, ZakatTypeConfig } from "@/types";
-import { downloadReceiptPdf } from "@/utils/receipt-pdf";
 import { useDraggableModal } from "@/composables/useDraggableModal";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Check } from "lucide-vue-next";
-
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 import { API_BASE_URL } from "@/env";
@@ -40,6 +14,7 @@ import PosPaymentForm from "@/components/counter/PosPaymentForm.vue";
 import PosSpgEntry from "@/components/counter/PosSpgEntry.vue";
 import PosReceipt from "@/components/counter/PosReceipt.vue";
 import type { ReceiptData } from "@/components/counter/PosReceipt.vue";
+import type { CounterPaymentChannel, ZakatTypeConfig } from "@/types";
 
 const auth = useAuthStore();
 const site = useSiteStore();
@@ -50,10 +25,12 @@ const portalLogoSrc = computed(() => {
   return `${API_BASE_URL}${url}`;
 });
 const isOnline = ref(typeof navigator !== "undefined" ? navigator.onLine : true);
-const handleOnline = () => { isOnline.value = true; };
-const handleOffline = () => { isOnline.value = false; };
-
-// ── State ──────────────────────────────────────────────
+const handleOnline = () => {
+  isOnline.value = true;
+};
+const handleOffline = () => {
+  isOnline.value = false;
+};
 
 type PosStep = "payer-type" | "ic-lookup" | "ssm-lookup" | "purpose" | "payment" | "spg-entry" | "processing" | "receipt";
 
@@ -62,7 +39,6 @@ const payerType = ref<"individu" | "korporat">("individu");
 const corporatePurpose = ref<"zakat_korporat" | "spg">("zakat_korporat");
 const processingText = ref("");
 
-// Selected payer info (shared between flows)
 const selectedPayer = ref({
   id: 0,
   displayName: "",
@@ -75,7 +51,6 @@ const selectedPayer = ref({
   registered: false,
 });
 
-// Step 2: Payment
 const zakatTypes = ref<ZakatTypeConfig[]>([]);
 const paymentForm = reactive({
   zakatType: "",
@@ -93,20 +68,7 @@ const submitting = ref(false);
 const showZakatModal = ref(false);
 const dragZakatModal = useDraggableModal();
 
-// Bank-style amount input (cents-based)
-const amountCents = ref(0);
-const amountDisplay = computed(() => (amountCents.value / 100).toFixed(2));
-
-function onAmountKeydown(event: KeyboardEvent) {
-  if (event.key === "Backspace") {
-    event.preventDefault();
-    amountCents.value = Math.floor(amountCents.value / 10);
-    paymentForm.amount = amountCents.value / 100;
-    return;
-// Receipt data
 const receiptData = ref<ReceiptData | null>(null);
-
-// ── Dynamic step indicator ─────────────────────────────
 
 const steps = computed(() => {
   if (payerType.value === "individu") {
@@ -126,13 +88,6 @@ const steps = computed(() => {
       { key: "receipt", label: "Selesai & Resit" },
     ];
   }
-}
-
-function selectZakatType(name: string) {
-  paymentForm.zakatType = name;
-  showZakatModal.value = false;
-  dragZakatModal.resetPosition();
-}
   return [
     { key: "payer-type", label: "Jenis Pembayar" },
     { key: "ssm-lookup", label: "Carian Syarikat" },
@@ -142,14 +97,18 @@ function selectZakatType(name: string) {
   ];
 });
 
+function selectZakatType(name: string) {
+  paymentForm.zakatType = name;
+  showZakatModal.value = false;
+  dragZakatModal.resetPosition();
+}
+
 const stepIndex = computed(() => {
   if (step.value === "processing") {
     return steps.value.findIndex((s) => s.key === "receipt");
   }
   return steps.value.findIndex((s) => s.key === step.value);
 });
-
-// ── Flow actions ───────────────────────────────────────
 
 function selectPayerType(type: "individu" | "korporat") {
   payerType.value = type;
@@ -178,7 +137,6 @@ async function onPaymentSuccess(receipt: {
   paymentId: number; receiptNo: string; paidAt: string; amount: number; status: string;
   zakatType: string; financialYear: string; paymentChannel: string; collectionPoint: string;
 }) {
-  // Processing animation
   step.value = "processing";
   const messages = ["Menghantar maklumat bayaran...", "Mengesahkan transaksi...", "Menjana resit..."];
   for (const msg of messages) {
@@ -246,6 +204,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("offline", handleOffline);
 });
 </script>
+
 
 <template>
   <div class="pos-bg relative flex min-h-screen flex-col overflow-hidden">

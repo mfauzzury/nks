@@ -8,7 +8,7 @@ import { listExceptions, type ExceptionItem } from "@/api/integration";
 const exceptions = ref<ExceptionItem[]>([]);
 const loading = ref(true);
 const total = ref(0);
-const statusFilter = ref("");
+const statusFilter = ref<"" | "unmatched" | "mismatch">("");
 const limit = 50;
 const offset = ref(0);
 
