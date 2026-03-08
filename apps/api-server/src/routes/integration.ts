@@ -137,7 +137,7 @@ integrationRouter.post("/files/upload", upload.single("file"), async (req: Authe
   }
 
   const validFileTypes = ["ENCRYPTED_TXT", "TXT", "CSV", "EXCEL"];
-  const fileType = validFileTypes.includes(fileTypeRaw) ? (fileTypeRaw as IntegrationFileTypeType) : IntegrationFileType.ENCRYPTED_TXT;
+  const fileType = validFileTypes.includes(fileTypeRaw) ? (fileTypeRaw as IntegrationFileTypeEnum) : IntegrationFileType.ENCRYPTED_TXT;
 
   const columnMappingJson = String(req.body?.columnMappingJson ?? "").trim() || null;
   const aiDetectedSource = String(req.body?.aiDetectedSource ?? "").trim() || null;
@@ -228,14 +228,14 @@ integrationRouter.get("/exceptions", async (req, res) => {
   const limit = Math.min(Number(req.query?.limit) || 50, 200);
   const offset = Number(req.query?.offset) || 0;
   const statusFilter = String(req.query?.status ?? "").trim().toLowerCase();
-  const matchStatuses: string[] =
+  const matchStatuses =
     statusFilter === "unmatched"
       ? ["UNMATCHED"]
       : statusFilter === "mismatch"
         ? ["MISMATCH"]
         : ["UNMATCHED", "MISMATCH"];
 
-  const where = { matchStatus: { in: matchStatuses } };
+  const where = { matchStatus: { in: matchStatuses as any } };
 
   const [exceptions, total] = await Promise.all([
     prisma.reconciliationResult.findMany({
@@ -2235,5 +2235,3 @@ integrationRouter.post("/reconciliation/apply-match-many-to-many-batch", async (
 
   return sendOk(res, { success: true, results });
 });
-
-

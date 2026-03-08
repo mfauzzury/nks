@@ -2,8 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus, SpgPayrollBatchStatus, SpgPayrollPaymentChannel } from "@prisma/client";
-import pkg from "@prisma/client";
-const { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus } = pkg;
 import { Router } from "express";
 import multer from "multer";
 
@@ -267,7 +265,7 @@ counterRouter.post("/deposits", depositSlipUpload.single("slipFile"), async (req
     const batch = await tx.counterDepositBatch.create({
       data: {
         referenceNo: buildCounterDepositReferenceNo(),
-        depositType: input.depositType as CounterDepositTypeType,
+        depositType: input.depositType as CounterDepositType,
         status: CounterDepositStatus.submitted,
         depositDate,
         declaredAmount: roundedDeclared,
@@ -620,4 +618,3 @@ counterRouter.post("/spg-batch", async (req: AuthedRequest, res) => {
     status: batch.status,
   });
 });
-

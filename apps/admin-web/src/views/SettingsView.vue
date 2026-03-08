@@ -50,6 +50,7 @@ const mediaPickerOpen = ref(false);
 const mediaPickerTarget = ref<"siteIconUrl" | "faviconUrl" | "sidebarLogoUrl" | "portalLogoUrl">("siteIconUrl");
 const mediaPickerItems = ref<Media[]>([]);
 const mediaPickerLoading = ref(false);
+const dragMediaPicker = useDraggableModal();
 
 async function openMediaPicker(target: typeof mediaPickerTarget.value) {
   mediaPickerTarget.value = target;

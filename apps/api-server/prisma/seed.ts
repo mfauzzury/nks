@@ -1010,11 +1010,6 @@ async function main() {
     const zakatType = seedZakatTypes[i % seedZakatTypes.length];
     const payMethod = seedPayMethods[i % seedPayMethods.length];
 
-    await prisma.guestPayment.create({
-      data: {
-    const zakatType = seedZakatTypes[i % seedZakatTypes.length];
-    const payMethod = seedPayMethods[i % seedPayMethods.length];
-
     await prisma.guestPayment.upsert({
       where: { receiptNo },
       update: { paidAt: baseDate },
