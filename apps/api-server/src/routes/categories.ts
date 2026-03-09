@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { Router } from "express";
 
 import { prisma } from "../prisma.js";

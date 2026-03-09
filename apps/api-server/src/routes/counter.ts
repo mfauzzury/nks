@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus, SpgPayrollBatchStatus, SpgPayrollPaymentChannel } from "@prisma/client";
+import pkg from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
+
+const { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus, SpgPayrollBatchStatus, SpgPayrollPaymentChannel } = pkg;
 
 import { env } from "../config/env.js";
 import { prisma } from "../prisma.js";
