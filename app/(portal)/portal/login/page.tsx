@@ -55,8 +55,8 @@ export default function PortalLoginPage() {
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-white/20">
               <img
-                src="/images/malaysian-muslim-portal.jpg"
-                alt="Pengguna menggunakan portal digital"
+                src="/images/malaysian-muslim-corporate.jpg"
+                alt="Bangunan korporat"
                 className="h-40 w-full object-cover"
               />
             </div>

@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { CounterDepositStatus, CounterDepositType, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus, SpgPayrollBatchStatus, SpgPayrollPaymentChannel } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 
@@ -13,6 +12,30 @@ import { sendError, sendOk } from "../utils/responses.js";
 import { counterDepositCreateSchema, counterDepositsQuerySchema, counterPaymentCreateSchema, counterPaymentsQuerySchema, counterSpgBatchCreateSchema } from "./schemas.js";
 
 export const counterRouter = Router();
+
+const GuestPaymentSource = {
+  COUNTER_COLLECTION: "COUNTER_COLLECTION",
+} as const;
+const CounterReconStatus = {
+  unbatched: "unbatched",
+  batched: "batched",
+} as const;
+const CounterPaymentChannel = {
+  COUNTER_CASH: "COUNTER_CASH",
+  COUNTER_CARD_TERMINAL: "COUNTER_CARD_TERMINAL",
+} as const;
+const CounterDepositStatus = {
+  submitted: "submitted",
+} as const;
+const ReconciliationCaseStatus = {
+  open: "open",
+  investigating: "investigating",
+} as const;
+const SpgPayrollBatchStatus = {
+  cancelled: "cancelled",
+  paid_failed: "paid_failed",
+  pending_payment: "pending_payment",
+} as const;
 
 const depositSlipStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, env.uploadDir),
@@ -265,7 +288,7 @@ counterRouter.post("/deposits", depositSlipUpload.single("slipFile"), async (req
     const batch = await tx.counterDepositBatch.create({
       data: {
         referenceNo: buildCounterDepositReferenceNo(),
-        depositType: input.depositType as CounterDepositType,
+        depositType: input.depositType,
         status: CounterDepositStatus.submitted,
         depositDate,
         declaredAmount: roundedDeclared,
@@ -551,7 +574,7 @@ counterRouter.post("/spg-batch", async (req: AuthedRequest, res) => {
   }
 
   const totalAmount = normalizedRows.reduce((sum, row) => sum + row.amount, 0);
-  const paymentChannel = input.paymentChannel as SpgPayrollPaymentChannel;
+  const paymentChannel = input.paymentChannel;
 
   const batch = await prisma.$transaction(async (tx) => {
     const created = await tx.spgPayrollBatch.create({

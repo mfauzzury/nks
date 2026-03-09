@@ -828,7 +828,7 @@ spgRouter.post("/admin/batches/:batchId/reject", async (req: AuthedRequest, res)
 spgRouter.get("/employers/:payerId/employees", async (req, res) => {
   const payerId = Number(req.params.payerId);
   const employer = await prisma.payerProfile.findUnique({ where: { id: payerId } });
-  if (!employer || employer.payerType !== "majikan_spg") {
+  if (!employer || !["majikan_spg", "korporat"].includes(employer.payerType)) {
     return sendError(res, 404, "NOT_FOUND", "SPG employer not found");
   }
 
@@ -843,7 +843,7 @@ spgRouter.post("/employers/:payerId/employees", async (req: AuthedRequest, res) 
   const payerId = Number(req.params.payerId);
   const input = spgEmployeeInputSchema.parse(req.body);
   const employer = await prisma.payerProfile.findUnique({ where: { id: payerId } });
-  if (!employer || employer.payerType !== "majikan_spg") {
+  if (!employer || !["majikan_spg", "korporat"].includes(employer.payerType)) {
     return sendError(res, 404, "NOT_FOUND", "SPG employer not found");
   }
 
@@ -883,7 +883,7 @@ spgRouter.post("/employers/:payerId/employees/import", async (req: AuthedRequest
   const input = spgEmployeeImportSchema.parse(req.body);
 
   const employer = await prisma.payerProfile.findUnique({ where: { id: payerId } });
-  if (!employer || employer.payerType !== "majikan_spg") {
+  if (!employer || !["majikan_spg", "korporat"].includes(employer.payerType)) {
     return sendError(res, 404, "NOT_FOUND", "SPG employer not found");
   }
 
@@ -977,7 +977,6 @@ spgRouter.delete("/batches/:batchId/slip-file", async (req: AuthedRequest, res) 
   });
   return sendOk(res, { success: true });
 });
-
 
 
 

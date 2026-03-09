@@ -1,19 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: corrad_xpress
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   api-server:
     build:
       context: .
@@ -25,7 +10,6 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
-      DATABASE_URL: "mysql://root:rootpass@mysql:3306/corrad_xpress"
       CORS_ORIGIN: "http://localhost:5173,http://localhost:80"
       SESSION_SECRET: "${SESSION_SECRET:-change-me-in-production}"
       SESSION_TTL_HOURS: 24
@@ -36,9 +20,6 @@ services:
       JAN_PGP_PASSWORD: "${JAN_PGP_PASSWORD:-nks-jan-dev-2025}"
     volumes:
       - api_uploads:/app/apps/api-server/uploads
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   admin-web:
     build:
@@ -53,5 +34,4 @@ services:
       - api-server
 
 volumes:
-  mysql_data:
   api_uploads:

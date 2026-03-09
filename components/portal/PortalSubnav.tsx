@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, LogOut } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Home, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clearPortalSession, type PortalSession } from "@/lib/portal-session";
 import { useSiteSettings, resolveAssetUrl } from "@/lib/site-settings";
 
-const navByRole = {
+type NavItem = {
+  href: string;
+  label: string;
+  children?: { href: string; label: string }[];
+};
+
+const navByRole: Record<"individu" | "corporate", NavItem[]> = {
   individu: [
     { href: "/portal/individual/dashboard", label: "Dashboard" },
     { href: "/payer/individual/pay", label: "Bayar Zakat" },
@@ -19,9 +26,92 @@ const navByRole = {
     { href: "/payer/corporate/zakat", label: "Bayar Zakat Korporat" },
     { href: "/payer/corporate/spg", label: "Urus SPG" },
     { href: "/payer/corporate/records", label: "Rekod Zakat" },
-    { href: "/payer/corporate/register", label: "Kemaskini Syarikat" },
+    {
+      href: "#",
+      label: "Kemaskini Syarikat",
+      children: [
+        { href: "/payer/corporate/register", label: "Kemaskini Syarikat" },
+        { href: "/payer/corporate/employees", label: "Kemaskini Kakitangan" },
+      ],
+    },
   ],
-} as const;
+};
+
+function DropdownNavItem({
+  item,
+  variant,
+  isActivePath,
+}: {
+  item: NavItem;
+  variant: "default" | "onDark";
+  isActivePath: (href: string) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const anyChildActive = item.children?.some((child) => isActivePath(child.href)) ?? false;
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={cn(
+          "inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition",
+          anyChildActive
+            ? "portal-btn-primary shadow-[0_0_14px_rgba(255,236,0,0.35)]"
+            : variant === "onDark"
+              ? "text-white/85 hover:bg-white/15 hover:text-white"
+              : "text-slate-600 hover:bg-cyan-100/50 hover:text-slate-900",
+        )}
+      >
+        {item.label}
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div
+          className={cn(
+            "absolute left-0 top-full z-50 mt-1 min-w-50 overflow-hidden rounded-xl border shadow-lg",
+            variant === "onDark"
+              ? "border-white/20 bg-slate-900/95 backdrop-blur-sm"
+              : "border-slate-200 bg-white",
+          )}
+        >
+          {item.children!.map((child) => {
+            const active = isActivePath(child.href);
+            return (
+              <Link
+                key={child.href}
+                href={child.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "block px-4 py-2.5 text-sm font-medium transition",
+                  active
+                    ? "portal-btn-primary"
+                    : variant === "onDark"
+                      ? "text-white/85 hover:bg-white/10 hover:text-white"
+                      : "text-slate-600 hover:bg-cyan-50 hover:text-slate-900",
+                )}
+              >
+                {child.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PortalSubnav({
   role,
@@ -75,6 +165,16 @@ export function PortalSubnav({
           </Link>
           <span className={cn("h-5 w-px shrink-0", variant === "onDark" ? "bg-white/30" : "bg-slate-300")} />
           {items.map((item) => {
+            if (item.children) {
+              return (
+                <DropdownNavItem
+                  key={item.label}
+                  item={item}
+                  variant={variant}
+                  isActivePath={isActivePath}
+                />
+              );
+            }
             const active = isActivePath(item.href);
             return (
               <Link
