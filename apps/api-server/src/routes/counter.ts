@@ -2,11 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 import pkg from "@prisma/client";
-import type { CounterDepositType, SpgPayrollPaymentChannel } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 
-const { CounterDepositStatus, CounterPaymentChannel, CounterReconStatus, GuestPaymentSource, ReconciliationCaseStatus, SpgPayrollBatchStatus, SpgPayrollPaymentChannel } = pkg;
+const {
+  CounterDepositStatus,
+  CounterPaymentChannel,
+  CounterReconStatus,
+  GuestPaymentSource,
+  ReconciliationCaseStatus,
+  SpgPayrollBatchStatus,
+} = pkg;
 
 import { env } from "../config/env.js";
 import { prisma } from "../prisma.js";
@@ -16,30 +22,6 @@ import { sendError, sendOk } from "../utils/responses.js";
 import { counterDepositCreateSchema, counterDepositsQuerySchema, counterPaymentCreateSchema, counterPaymentsQuerySchema, counterSpgBatchCreateSchema } from "./schemas.js";
 
 export const counterRouter = Router();
-
-const GuestPaymentSource = {
-  COUNTER_COLLECTION: "COUNTER_COLLECTION",
-} as const;
-const CounterReconStatus = {
-  unbatched: "unbatched",
-  batched: "batched",
-} as const;
-const CounterPaymentChannel = {
-  COUNTER_CASH: "COUNTER_CASH",
-  COUNTER_CARD_TERMINAL: "COUNTER_CARD_TERMINAL",
-} as const;
-const CounterDepositStatus = {
-  submitted: "submitted",
-} as const;
-const ReconciliationCaseStatus = {
-  open: "open",
-  investigating: "investigating",
-} as const;
-const SpgPayrollBatchStatus = {
-  cancelled: "cancelled",
-  paid_failed: "paid_failed",
-  pending_payment: "pending_payment",
-} as const;
 
 const depositSlipStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, env.uploadDir),
