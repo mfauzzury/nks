@@ -1,11 +1,15 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage — API server only (matches npm workspaces + lockfile)
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy workspace and app package files
+# Prisma on Alpine needs OpenSSL
+RUN apk add --no-cache openssl
+
+# Copy root and all workspace package.json so npm ci matches lockfile (workspaces: apps/*)
 COPY package.json package-lock.json* ./
 COPY apps/api-server/package.json ./apps/api-server/
+COPY apps/admin-web/package.json ./apps/admin-web/
 
 # Install all dependencies (including dev for build)
 RUN npm ci
@@ -19,17 +23,20 @@ RUN npx prisma generate
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
-# Copy package files
+RUN apk add --no-cache openssl
+
+# Copy package files (all workspaces — required for lockfile/consistency if re-running npm)
 COPY package.json package-lock.json* ./
 COPY apps/api-server/package.json ./apps/api-server/
+COPY apps/admin-web/package.json ./apps/admin-web/
 
 # Copy production node_modules from builder (Prisma client already generated)
 COPY --from=builder /app/node_modules ./node_modules
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # Copy built API and Prisma schema (for migrations at runtime if needed)
 COPY --from=builder /app/apps/api-server/dist ./apps/api-server/dist
