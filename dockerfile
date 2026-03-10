@@ -17,9 +17,9 @@ RUN npm ci
 # Copy api-server source and prisma schema
 COPY apps/api-server ./apps/api-server
 
-# Generate Prisma client and build API
+# Generate Prisma client and build API (generate must match api-server node_modules — see schema output)
 WORKDIR /app/apps/api-server
-RUN npx prisma generate
+RUN npm exec prisma generate
 RUN npm run build
 
 # Production stage
@@ -37,6 +37,9 @@ COPY apps/admin-web/package.json ./apps/admin-web/
 # Copy production node_modules from builder (Prisma client already generated)
 COPY --from=builder /app/node_modules ./node_modules
 RUN npm prune --omit=dev
+# After prune, ensure api-server resolves generated client (not stub) — overlay .prisma from builder
+RUN mkdir -p ./apps/api-server/node_modules
+COPY --from=builder /app/apps/api-server/node_modules/.prisma ./apps/api-server/node_modules/.prisma
 
 # Copy built API and Prisma schema (for migrations at runtime if needed)
 COPY --from=builder /app/apps/api-server/dist ./apps/api-server/dist

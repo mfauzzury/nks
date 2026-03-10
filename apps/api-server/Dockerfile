@@ -21,7 +21,9 @@ WORKDIR /app/apps/api-server
 
 # Prisma generate needs DATABASE_URL in env; placeholder only (no DB connection during build)
 ENV DATABASE_URL="mysql://root:rootpass@localhost:3306/corrad_xpress"
-RUN npx prisma generate
+# Generate into apps/api-server/node_modules/.prisma (schema output path); npm workspaces
+# can otherwise leave the stub in api-server while client is generated at repo root.
+RUN npm exec prisma generate
 RUN npm run build
 
 # Uploads directory (matches docker-compose volume and UPLOAD_DIR)

@@ -1,5 +1,8 @@
+// Output next to workspace @prisma/client so runtime always loads the generated
+// client (avoids stub at apps/api-server/node_modules/.prisma when generate ran at repo root).
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
