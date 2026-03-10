@@ -48,6 +48,28 @@ app.use(issueCsrfCookie);
 
 app.use("/uploads", express.static(env.uploadDir));
 
+// Browsers opening the API host root (GET /) would otherwise hit requireAuth → 401 JSON.
+// If the admin SPA is on another host, point the public domain there or proxy /api only.
+app.use((req, res, next) => {
+  if (req.method === "GET" && !req.path.startsWith("/api") && req.path !== "/uploads" && !req.path.startsWith("/uploads/")) {
+    res
+      .status(404)
+      .type("html")
+      .send(
+        `<!DOCTYPE html><html><head><meta charset="utf-8"><title>API only</title></head><body>` +
+          `<h1>This URL is the API server</h1>` +
+          `<p>You are seeing this because this host is pointing at the <strong>API</strong> container only. ` +
+          `The login/admin UI is served by the <strong>admin-web</strong> (nginx) app.</p>` +
+          `<p><strong>Fix (Coolify):</strong> Attach the domain to the <strong>admin-web</strong> service (static), not the API. ` +
+          `Proxy <code>/api</code> to the API service, or set the SPA’s API base URL to your API URL and add that origin to <code>CORS_ORIGIN</code>.</p>` +
+          `<p>API health check: <a href="/api/health">/api/health</a></p>` +
+          `</body></html>`,
+      );
+    return;
+  }
+  next();
+});
+
 app.use("/api", healthRouter);
 app.use("/api/auth", authPublicRouter);
 
