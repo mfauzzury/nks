@@ -236,7 +236,7 @@ export default function CorporateRecordsPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number) => formatCurrency(value)}
+                        formatter={(value) => formatCurrency(Number(value ?? 0))}
                         contentStyle={{ borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.2)", fontSize: "0.8125rem", background: "rgba(0, 9, 87, 0.92)", color: "#fff" }}
                       />
                     </PieChart>

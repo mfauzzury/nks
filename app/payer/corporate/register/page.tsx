@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Building2, CheckCircle, AlertCircle } from "lucide-react";
-import { registerCorporate, submitProfileUpdateRequest } from "@/lib/payer-portal-api";
+import { getPortalCorporateProfile, registerCorporate, submitProfileUpdateRequest } from "@/lib/payer-portal-api";
+import { savePortalSession } from "@/lib/portal-session";
 import { usePortalSession } from "@/lib/use-portal-session";
 import { PortalSubnav } from "@/components/portal/PortalSubnav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,57 +18,107 @@ export default function CorporateRegisterPage() {
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [ssmNo, setSsmNo] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [companyType, setCompanyType] = useState("");
+  const [taxNo, setTaxNo] = useState("");
+  const [taxBranch, setTaxBranch] = useState("");
+  const [password, setPassword] = useState("");
+  const [repName, setRepName] = useState("");
+  const [repIcNo, setRepIcNo] = useState("");
+  const [repPosition, setRepPosition] = useState("");
+  const [repEmail, setRepEmail] = useState("");
+  const [repPhone, setRepPhone] = useState("");
+
+  useEffect(() => {
+    if (!session) return;
+    setCompanyName(session.companyName || session.displayName || "");
+    setSsmNo(session.identityNo || "");
+    setDisplayName(session.displayName || "");
+  }, [session]);
+
+  useEffect(() => {
+    async function preloadCorporateProfile() {
+      if (!isLoggedIn || !session?.identityNo) return;
+      try {
+        const res = await getPortalCorporateProfile(session.identityNo);
+        setCompanyName(res.data.corporate?.companyName || session.companyName || session.displayName || "");
+        setSsmNo(res.data.corporate?.ssmNo || res.data.identityNo || session.identityNo || "");
+        setDisplayName(res.data.displayName || session.displayName || "");
+        setCompanyType(res.data.corporate?.companyType || "");
+        setTaxNo(res.data.corporate?.taxNo || "");
+        setTaxBranch(res.data.corporate?.taxBranch || "");
+        const contact = res.data.contactPersons[0];
+        if (contact) {
+          setRepName(contact.name || "");
+          setRepIcNo(contact.icNo || "");
+          setRepPosition(contact.position || "");
+          setRepEmail(contact.email || "");
+          setRepPhone(contact.phone || "");
+        }
+      } catch {
+        // Keep session fallback values if profile fetch fails.
+      }
+    }
+    void preloadCorporateProfile();
+  }, [isLoggedIn, session]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setMessage("");
-    const form = new FormData(e.currentTarget);
 
     try {
       if (isLoggedIn) {
         await submitProfileUpdateRequest({
           payerId: session!.payerId,
           payerType: "korporat",
-          companyName: String(form.get("companyName") || ""),
-          companyType: String(form.get("companyType") || ""),
-          taxNo: String(form.get("taxNo") || ""),
-          taxBranch: String(form.get("taxBranch") || ""),
+          displayName: displayName || companyName,
+          companyName,
+          companyType,
+          taxNo,
+          taxBranch,
           contactPerson: {
-            name: String(form.get("repName") || ""),
-            icNo: String(form.get("repIcNo") || ""),
-            position: String(form.get("repPosition") || ""),
-            email: String(form.get("repEmail") || ""),
-            phone: String(form.get("repPhone") || ""),
+            name: repName,
+            icNo: repIcNo,
+            position: repPosition,
+            email: repEmail || undefined,
+            phone: repPhone,
           },
         });
+        savePortalSession({
+          ...session!,
+          displayName: displayName || companyName,
+          companyName,
+        });
         setIsSuccess(true);
-        setMessage("Permohonan kemaskini telah dihantar untuk semakan pentadbir.");
+        setMessage("Maklumat syarikat berjaya dikemaskini.");
       } else {
         const res = await registerCorporate({
-          displayName: String(form.get("displayName") || form.get("companyName") || ""),
-          companyName: String(form.get("companyName") || ""),
-          ssmNo: String(form.get("ssmNo") || ""),
-          identityNo: String(form.get("ssmNo") || ""),
+          displayName: displayName || companyName,
+          companyName,
+          ssmNo,
+          identityNo: ssmNo,
           identityType: "ssm",
-          password: String(form.get("password") || ""),
-          companyType: String(form.get("companyType") || ""),
-          taxNo: String(form.get("taxNo") || ""),
-          taxBranch: String(form.get("taxBranch") || ""),
+          password,
+          companyType,
+          taxNo,
+          taxBranch,
           contactPersons: [
             {
-              name: String(form.get("repName") || ""),
-              icNo: String(form.get("repIcNo") || ""),
-              position: String(form.get("repPosition") || ""),
-              email: String(form.get("repEmail") || ""),
-              phone: String(form.get("repPhone") || ""),
+              name: repName,
+              icNo: repIcNo,
+              position: repPosition,
+              email: repEmail || undefined,
+              phone: repPhone,
               isAuthorized: true,
             },
           ],
         });
         setIsSuccess(true);
         setMessage(`Pendaftaran korporat berjaya. ID Pembayar: ${res.data.id ?? "-"}`);
-        e.currentTarget.reset();
+        setPassword("");
       }
     } catch (error) {
       setIsSuccess(false);
@@ -118,7 +169,8 @@ export default function CorporateRegisterPage() {
                 id="companyName"
                 name="companyName"
                 required
-                defaultValue={isLoggedIn ? (session?.companyName || session?.displayName || "") : ""}
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
                 placeholder="cth. Syarikat ABC Sdn Bhd"
               />
             </div>
@@ -128,7 +180,8 @@ export default function CorporateRegisterPage() {
                 id="ssmNo"
                 name="ssmNo"
                 required={!isLoggedIn}
-                defaultValue={isLoggedIn ? (session?.identityNo || "") : ""}
+                value={ssmNo}
+                onChange={(e) => setSsmNo(e.target.value)}
                 readOnly={isLoggedIn}
                 className={isLoggedIn ? "bg-slate-50" : ""}
                 placeholder="cth. 202301012345"
@@ -137,20 +190,20 @@ export default function CorporateRegisterPage() {
             {!isLoggedIn && (
               <div className="space-y-2">
                 <Label htmlFor="displayName">Nama paparan</Label>
-                <Input id="displayName" name="displayName" placeholder="cth. ABC Sdn Bhd" />
+                <Input id="displayName" name="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="cth. ABC Sdn Bhd" />
               </div>
             )}
             <div className="space-y-2">
               <Label htmlFor="companyType">Jenis syarikat</Label>
-              <Input id="companyType" name="companyType" placeholder="cth. Sdn Bhd / Berhad / Enterprise" />
+              <Input id="companyType" name="companyType" value={companyType} onChange={(e) => setCompanyType(e.target.value)} placeholder="cth. Sdn Bhd / Berhad / Enterprise" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="taxNo">No. cukai</Label>
-              <Input id="taxNo" name="taxNo" placeholder="cth. C-1234567890" />
+              <Input id="taxNo" name="taxNo" value={taxNo} onChange={(e) => setTaxNo(e.target.value)} placeholder="cth. C-1234567890" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="taxBranch">Cawangan cukai</Label>
-              <Input id="taxBranch" name="taxBranch" placeholder="cth. Kuala Lumpur" />
+              <Input id="taxBranch" name="taxBranch" value={taxBranch} onChange={(e) => setTaxBranch(e.target.value)} placeholder="cth. Kuala Lumpur" />
             </div>
           </CardContent>
         </Card>
@@ -164,7 +217,7 @@ export default function CorporateRegisterPage() {
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="password">Kata Laluan *</Label>
-                <Input id="password" name="password" type="password" required placeholder="Minimum 6 aksara" />
+                <Input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimum 6 aksara" />
               </div>
             </CardContent>
           </Card>
@@ -178,23 +231,23 @@ export default function CorporateRegisterPage() {
           <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="repName">Nama wakil *</Label>
-              <Input id="repName" name="repName" required placeholder="cth. Siti binti Hassan" />
+              <Input id="repName" name="repName" required value={repName} onChange={(e) => setRepName(e.target.value)} placeholder="cth. Siti binti Hassan" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="repIcNo">No. IC wakil</Label>
-              <Input id="repIcNo" name="repIcNo" placeholder="cth. 880101-01-1234" />
+              <Input id="repIcNo" name="repIcNo" value={repIcNo} onChange={(e) => setRepIcNo(e.target.value)} placeholder="cth. 880101-01-1234" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="repPosition">Jawatan</Label>
-              <Input id="repPosition" name="repPosition" placeholder="cth. Pengurus Kewangan" />
+              <Input id="repPosition" name="repPosition" value={repPosition} onChange={(e) => setRepPosition(e.target.value)} placeholder="cth. Pengurus Kewangan" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="repEmail">Email wakil</Label>
-              <Input id="repEmail" name="repEmail" type="email" placeholder="cth. siti@abc.com.my" />
+              <Input id="repEmail" name="repEmail" type="email" value={repEmail} onChange={(e) => setRepEmail(e.target.value)} placeholder="cth. siti@abc.com.my" />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="repPhone">No. telefon wakil</Label>
-              <Input id="repPhone" name="repPhone" placeholder="cth. 012-345 6789" />
+              <Input id="repPhone" name="repPhone" value={repPhone} onChange={(e) => setRepPhone(e.target.value)} placeholder="cth. 012-345 6789" />
             </div>
           </CardContent>
         </Card>

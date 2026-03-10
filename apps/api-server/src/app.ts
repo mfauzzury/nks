@@ -60,7 +60,9 @@ app.use((req, res, next) => {
     (/^\/api\/spg\/batches\/\d+$/.test(req.path) && req.method === "GET") ||
     (/^\/api\/spg\/batches\/\d+\/receipt$/.test(req.path) && req.method === "GET") ||
     (/^\/api\/spg\/batches\/\d+\/pay\/online\/initiate$/.test(req.path) && req.method === "POST") ||
-    (/^\/api\/spg\/batches\/\d+\/pay\/online\/callback$/.test(req.path) && req.method === "POST");
+    (/^\/api\/spg\/batches\/\d+\/pay\/online\/callback$/.test(req.path) && req.method === "POST") ||
+    (/^\/api\/spg\/employers\/\d+\/employees/.test(req.path) && (req.method === "GET" || req.method === "POST")) ||
+    (/^\/api\/spg\/employees\/\d+$/.test(req.path) && req.method === "PUT");
   const isPublicPortalWrite =
     (req.path === "/api/payers/individual" && req.method === "POST") ||
     (req.path === "/api/payers/corporate" && req.method === "POST") ||
@@ -113,7 +115,9 @@ app.use((req, res, next) => {
     (/^\/api\/spg\/batches\/\d+$/.test(req.path) && req.method === "GET") ||
     (/^\/api\/spg\/batches\/\d+\/receipt$/.test(req.path) && req.method === "GET") ||
     (/^\/api\/spg\/batches\/\d+\/pay\/online\/initiate$/.test(req.path) && req.method === "POST") ||
-    (/^\/api\/spg\/batches\/\d+\/pay\/online\/callback$/.test(req.path) && req.method === "POST");
+    (/^\/api\/spg\/batches\/\d+\/pay\/online\/callback$/.test(req.path) && req.method === "POST") ||
+    (/^\/api\/spg\/employers\/\d+\/employees/.test(req.path) && (req.method === "GET" || req.method === "POST")) ||
+    (/^\/api\/spg\/employees\/\d+$/.test(req.path) && req.method === "PUT");
   const isPublicPortalWrite =
     (req.path === "/api/payers/individual" && req.method === "POST") ||
     (req.path === "/api/payers/corporate" && req.method === "POST") ||

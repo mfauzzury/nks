@@ -578,13 +578,17 @@ payersRouter.get("/portal-profile/corporate/:ssmNo", async (req, res) => {
           companyName: payer.corporate.companyName,
           ssmNo: payer.corporate.ssmNo,
           companyType: payer.corporate.companyType,
+          taxNo: payer.corporate.taxNo,
+          taxBranch: payer.corporate.taxBranch,
         }
       : null,
     contactPersons: payer.contactPersons.map((cp) => ({
       name: cp.name,
+      icNo: cp.icNo,
       position: cp.position,
       email: cp.email,
       phone: cp.phone,
+      isAuthorized: cp.isAuthorized,
     })),
   });
 });
@@ -799,7 +803,13 @@ payersRouter.post("/update-request", async (req, res) => {
   const input = payerUpdateRequestSchema.parse(req.body);
   const existing = await prisma.payerProfile.findUnique({
     where: { id: input.payerId },
-    include: { individual: true },
+    include: {
+      individual: true,
+      corporate: true,
+      contactPersons: {
+        orderBy: [{ isAuthorized: "desc" }, { id: "asc" }],
+      },
+    },
   });
   if (!existing) return sendError(res, 404, "NOT_FOUND", "Payer not found");
   if (existing.status === "merged") {
@@ -826,6 +836,46 @@ payersRouter.post("/update-request", async (req, res) => {
       });
     }
 
+    if (existing.corporate) {
+      await tx.payerCorporate.update({
+        where: { payerId: input.payerId },
+        data: {
+          ...(input.companyName !== undefined ? { companyName: input.companyName } : {}),
+          ...(input.companyType !== undefined ? { companyType: input.companyType } : {}),
+          ...(input.taxNo !== undefined ? { taxNo: input.taxNo } : {}),
+          ...(input.taxBranch !== undefined ? { taxBranch: input.taxBranch } : {}),
+        },
+      });
+    }
+
+    if (input.contactPerson) {
+      const targetContact = existing.contactPersons[0] ?? null;
+      if (targetContact) {
+        await tx.payerContactPerson.update({
+          where: { id: targetContact.id },
+          data: {
+            ...(input.contactPerson.name !== undefined ? { name: input.contactPerson.name } : {}),
+            ...(input.contactPerson.icNo !== undefined ? { icNo: input.contactPerson.icNo } : {}),
+            ...(input.contactPerson.position !== undefined ? { position: input.contactPerson.position } : {}),
+            ...(input.contactPerson.email !== undefined ? { email: input.contactPerson.email } : {}),
+            ...(input.contactPerson.phone !== undefined ? { phone: input.contactPerson.phone } : {}),
+          },
+        });
+      } else if (input.contactPerson.name) {
+        await tx.payerContactPerson.create({
+          data: {
+            payerId: input.payerId,
+            name: input.contactPerson.name,
+            icNo: input.contactPerson.icNo,
+            position: input.contactPerson.position,
+            email: input.contactPerson.email,
+            phone: input.contactPerson.phone,
+            isAuthorized: true,
+          },
+        });
+      }
+    }
+
     return payer;
   });
 
@@ -840,6 +890,19 @@ payersRouter.post("/update-request", async (req, res) => {
       phone: existing.phone,
       occupation: existing.individual?.occupation ?? null,
       incomeSource: existing.individual?.incomeSource ?? null,
+      companyName: existing.corporate?.companyName ?? null,
+      companyType: existing.corporate?.companyType ?? null,
+      taxNo: existing.corporate?.taxNo ?? null,
+      taxBranch: existing.corporate?.taxBranch ?? null,
+      contactPerson: existing.contactPersons[0]
+        ? {
+            name: existing.contactPersons[0].name,
+            icNo: existing.contactPersons[0].icNo,
+            position: existing.contactPersons[0].position,
+            email: existing.contactPersons[0].email,
+            phone: existing.contactPersons[0].phone,
+          }
+        : null,
     },
     newValueJson: {
       displayName: input.displayName,
@@ -847,6 +910,11 @@ payersRouter.post("/update-request", async (req, res) => {
       phone: input.phone,
       occupation: input.occupation,
       incomeSource: input.incomeSource,
+      companyName: input.companyName,
+      companyType: input.companyType,
+      taxNo: input.taxNo,
+      taxBranch: input.taxBranch,
+      contactPerson: input.contactPerson,
       reason: input.reason,
       isCriticalChange: input.isCriticalChange,
     },

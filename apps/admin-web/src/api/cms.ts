@@ -52,6 +52,30 @@ export async function fetchDashboardSummary() {
   );
 }
 
+export type MainDashboardData = {
+  summary: {
+    totalPayers: number;
+    totalIndividual: number;
+    totalCorporate: number;
+    totalSpgEmployer: number;
+    totalAmount: number;
+    totalTransactions: number;
+    uniquePayers: number;
+    newPayersThisMonth: number;
+  };
+  monthlyTrend: Array<{ month: string; amount: number }>;
+  topPayers: Array<{ identityNo: string; name: string; payerType: string; amount: number }>;
+  genderDistribution: Array<{ label: string; value: number }>;
+  zakatTypeDistribution: Array<{ label: string; value: number }>;
+  paymentMethodDistribution: Array<{ label: string; value: number }>;
+  recentPayers: Array<{ id: number; payerCode: string; displayName: string; payerType: string; createdAt: string }>;
+};
+
+export async function fetchMainDashboard(year?: string) {
+  const params = year && year !== "all" ? `?year=${year}` : "";
+  return apiRequest<{ data: MainDashboardData }>(`/api/dashboard/main${params}`);
+}
+
 export async function getDatabaseSchema() {
   return apiRequest<{ data: DatabaseSchemaPayload }>("/api/development/database-schema");
 }

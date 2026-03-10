@@ -20,11 +20,13 @@ import {
   Send,
   Trash2,
   Upload,
+  Users,
 } from "lucide-react";
 import {
   createSpgBatch,
   downloadSpgTemplate,
   initiateSpgOnlinePayment,
+  listEmployees,
   previewSpgBatchUpload,
   revalidateSpgBatch,
   type SpgPreviewRow,
@@ -163,6 +165,7 @@ export default function SpgNewSubmissionPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   const validatedRows = useMemo(() => validateRows(rows), [rows]);
   const totalAmount = useMemo(
@@ -176,6 +179,37 @@ export default function SpgNewSubmissionPage() {
   const selectedChannel = CHANNELS.find((x) => x.code === paymentChannel) || CHANNELS[0];
   const validCount = validatedRows.filter((r) => r.errors.length === 0 && !r.duplicateInFile && !r.duplicateInMonthBatch).length;
   const invalidCount = validatedRows.length - validCount;
+
+  async function onUseExistingEmployees() {
+    setLoadingEmployees(true);
+    setError("");
+    setMessage("");
+    try {
+      const res = await listEmployees(employerPayerId);
+      const empRows = res.data;
+      if (empRows.length === 0) {
+        setError("Tiada kakitangan berdaftar. Sila daftarkan kakitangan terlebih dahulu di halaman Kemaskini Kakitangan.");
+        return;
+      }
+      const mapped: EditableRow[] = empRows.map((emp, i) => ({
+        id: `emp-${emp.id}-${i}`,
+        employeeName: emp.employeeName,
+        employeeIdentityNo: emp.employeeIdentityNo,
+        amount: emp.deductionAmount != null ? String(emp.deductionAmount) : "",
+        agreedAmount: emp.deductionAmount != null ? Number(emp.deductionAmount) : null,
+        duplicateInFile: false,
+        duplicateInMonthBatch: false,
+        errors: [],
+      }));
+      setRows(mapped);
+      setMessage(`${mapped.length} kakitangan berjaya dimuatkan dari senarai sedia ada.`);
+      setStep(3);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal memuatkan senarai kakitangan");
+    } finally {
+      setLoadingEmployees(false);
+    }
+  }
 
   async function onPreviewUpload() {
     if (!uploadFile) {
@@ -424,6 +458,30 @@ export default function SpgNewSubmissionPage() {
                 )}
               </div>
             </div>
+
+            {/* Divider: OR use existing employees */}
+            <div className="flex items-center gap-4 px-6">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-400">atau</span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            <div className="px-6 pb-5">
+              <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/50 p-5 text-center">
+                <p className="mb-3 text-sm font-medium text-slate-700">Guna senarai kakitangan yang telah didaftarkan</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                  onClick={onUseExistingEmployees}
+                  disabled={loadingEmployees}
+                >
+                  <Users className="h-4 w-4" />
+                  {loadingEmployees ? "Memuatkan..." : "Guna Senarai Kakitangan Sedia Ada"}
+                </Button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
               <Button type="button" variant="ghost" className="gap-2 text-slate-600" onClick={() => setStep(1)}>
                 <ArrowLeft className="h-4 w-4" />

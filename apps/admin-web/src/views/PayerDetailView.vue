@@ -370,7 +370,7 @@ async function load() {
     spgLinkage.value = null;
   }
 
-  if (payer.value?.payerType === "majikan_spg") {
+  if (payer.value?.payerType === "majikan_spg" || payer.value?.payerType === "korporat") {
     try {
       const empRes = await listSpgEmployees(payerId.value);
       spgEmployees.value = empRes.data;
@@ -811,7 +811,7 @@ onMounted(load);
         </div>
 
         <!-- SPG Employees (Employer Payers) -->
-        <article v-if="payer.payerType === 'majikan_spg' && spgEmployees.length > 0" class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <article v-if="payer.payerType === 'majikan_spg' || payer.payerType === 'korporat'" class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
             <div class="flex items-center gap-2">
               <User class="h-4 w-4 text-violet-500" />
@@ -822,7 +822,10 @@ onMounted(load);
               Urus Pekerja →
             </router-link>
           </div>
-          <div class="overflow-x-auto">
+          <div v-if="spgEmployees.length === 0" class="px-6 py-6 text-sm text-slate-500">
+            Tiada pekerja SPG direkodkan untuk pembayar ini.
+          </div>
+          <div v-else class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">

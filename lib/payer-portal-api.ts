@@ -131,6 +131,32 @@ export type IndividualPortalProfileResult = {
     } | null;
   };
 };
+export type CorporatePortalProfileResult = {
+  data: {
+    id: number;
+    payerCode: string;
+    displayName: string;
+    identityNo: string | null;
+    email: string | null;
+    phone: string | null;
+    payerType: string;
+    corporate: {
+      companyName: string;
+      ssmNo: string;
+      companyType: string | null;
+      taxNo: string | null;
+      taxBranch: string | null;
+    } | null;
+    contactPersons: Array<{
+      name: string;
+      icNo: string | null;
+      position: string | null;
+      email: string | null;
+      phone: string | null;
+      isAuthorized: boolean;
+    }>;
+  };
+};
 
 export function loginPayer(input: { identityNo: string; password: string }) {
   return request<PayerLoginResult>("/api/payers/login", {
@@ -141,6 +167,10 @@ export function loginPayer(input: { identityNo: string; password: string }) {
 
 export function getPortalIndividualProfile(identityNo: string) {
   return request<IndividualPortalProfileResult>(`/api/payers/portal-profile/${encodeURIComponent(identityNo)}`);
+}
+
+export function getPortalCorporateProfile(ssmNo: string) {
+  return request<CorporatePortalProfileResult>(`/api/payers/portal-profile/corporate/${encodeURIComponent(ssmNo)}`);
 }
 
 export function registerIndividual(input: Record<string, unknown>) {
@@ -472,6 +502,49 @@ export function getSpgBatchList(input: {
 export function getSpgBatchDetail(batchId: number) {
   return request<SpgBatchDetailResult>(`/api/spg/batches/${batchId}`, {
     headers: portalHeaders(),
+  });
+}
+
+export type SpgEmployeeRecord = {
+  id: number;
+  employerPayerId: number;
+  employeeIdentityNo: string;
+  employeeName: string;
+  employeeEmail: string | null;
+  employeePhone: string | null;
+  deductionAmount: number | null;
+  employmentStatus: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function listEmployees(payerId: number) {
+  return request<{ data: SpgEmployeeRecord[] }>(`/api/spg/employers/${payerId}/employees`, {
+    headers: portalHeaders(),
+  });
+}
+
+export function createEmployee(payerId: number, data: { employeeName: string; employeeIdentityNo: string; deductionAmount?: number | null; employmentStatus?: string | null }) {
+  return request<{ data: { employee: SpgEmployeeRecord; duplicateCase: unknown } }>(`/api/spg/employers/${payerId}/employees`, {
+    method: "POST",
+    headers: portalHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateEmployee(employeeId: number, data: Partial<{ employeeName: string; employeeIdentityNo: string; deductionAmount: number | null; employmentStatus: string | null }>) {
+  return request<{ data: SpgEmployeeRecord }>(`/api/spg/employees/${employeeId}`, {
+    method: "PUT",
+    headers: portalHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function importEmployees(payerId: number, employees: Array<{ employeeName: string; employeeIdentityNo: string; deductionAmount?: number | null; employmentStatus?: string | null }>) {
+  return request<{ data: { imported: number; duplicateCases: number; rows: SpgEmployeeRecord[] } }>(`/api/spg/employers/${payerId}/employees/import`, {
+    method: "POST",
+    headers: portalHeaders(),
+    body: JSON.stringify({ employees }),
   });
 }
 

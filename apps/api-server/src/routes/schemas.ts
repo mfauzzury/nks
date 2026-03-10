@@ -229,6 +229,17 @@ export const payerUpdateRequestSchema = z.object({
   phone: z.string().optional(),
   occupation: z.string().optional(),
   incomeSource: z.string().optional(),
+  companyName: z.string().min(1).optional(),
+  companyType: z.string().optional(),
+  taxNo: z.string().optional(),
+  taxBranch: z.string().optional(),
+  contactPerson: z.object({
+    name: z.string().min(1).optional(),
+    icNo: z.string().trim().max(30).optional(),
+    position: z.string().optional(),
+    email: z.string().email().optional(),
+    phone: z.string().optional(),
+  }).optional(),
   reason: z.string().optional(),
   isCriticalChange: z.boolean().default(false),
 });
