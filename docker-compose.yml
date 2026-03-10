@@ -10,7 +10,8 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
-      CORS_ORIGIN: "http://localhost:5173,http://localhost:80"
+      # Must include every origin that loads the admin SPA (comma-separated)
+      CORS_ORIGIN: "http://localhost:5173,http://localhost:80,https://nks.sena.my"
       SESSION_SECRET: "${SESSION_SECRET:-change-me-in-production}"
       SESSION_TTL_HOURS: 24
       UPLOAD_DIR: uploads
@@ -26,8 +27,9 @@ services:
       context: .
       dockerfile: apps/admin-web/Dockerfile
       args:
-        # API URL as seen from the browser (user's machine)
-        VITE_API_BASE_URL: "http://localhost:4000"
+        # Option A same-origin: empty = relative /api/... (works with nginx proxy below)
+        # Production Coolify: set to https://nks.sena.my so SPA hits same host
+        VITE_API_BASE_URL: ""
     ports:
       - "5173:80"
     depends_on:

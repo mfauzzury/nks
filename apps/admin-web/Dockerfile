@@ -1,10 +1,12 @@
-# Admin Web — Vue 3 + Vite (matches root package.json workspaces)
+# Admin Web — Vue 3 + Vite (same-origin: nginx proxies /api → API container)
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Build arg for API URL (baked into client at build time)
-ARG VITE_API_BASE_URL=http://localhost:4000
+# Build-time API base URL as seen by the browser (Option A: same origin)
+# Production: https://nks.sena.my so fetch goes to https://nks.sena.my/api/... (nginx proxies to API)
+# Local docker-compose: use empty string "" so fetch uses relative /api/... on current host
+ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Copy root + all workspace package.json so npm ci matches package-lock
@@ -20,20 +22,11 @@ COPY apps/admin-web ./apps/admin-web
 
 RUN npm run build -w admin-web
 
-# Production: serve with nginx
+# Production: nginx proxies /api and /uploads to API container
 FROM nginx:alpine
 
 COPY --from=builder /app/apps/admin-web/dist /usr/share/nginx/html
-
-# SPA fallback: serve index.html for all routes
-RUN echo 'server { \
-    listen 80; \
-    root /usr/share/nginx/html; \
-    index index.html; \
-    location / { \
-        try_files $uri $uri/ /index.html; \
-    } \
-}' > /etc/nginx/conf.d/default.conf
+COPY apps/admin-web/nginx-default.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
