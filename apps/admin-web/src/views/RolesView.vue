@@ -19,6 +19,10 @@ const editingId = ref<number | null>(null);
 const saving = ref(false);
 
 const availablePermissions = [
+  "pembayar.view", "pembayar.create", "pembayar.edit", "pembayar.delete",
+  "spg.view", "spg.create", "spg.edit",
+  "kaunter.view", "kaunter.create", "kaunter.reconcile",
+  "zakat.view", "zakat.create", "zakat.edit", "zakat.delete",
   "posts.view", "posts.create", "posts.edit", "posts.delete",
   "pages.view", "pages.create", "pages.edit", "pages.delete",
   "media.view", "media.upload", "media.delete",
@@ -28,6 +32,7 @@ const availablePermissions = [
   "menus.view", "menus.edit",
   "integration.view", "integration.upload", "integration.process",
   "integration.reconcile", "integration.exceptions", "integration.reports",
+  "development.view",
 ];
 
 const form = ref<RoleInput>({

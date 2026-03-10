@@ -10,21 +10,26 @@ const prisma = new PrismaClient();
 const SEED_BATCH_FILE_HASH = crypto.createHash("sha256").update("seed-batch-processing-demo-001").digest("hex");
 
 async function main() {
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
+  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@zakatbantu.my";
   const adminPassword = process.env.ADMIN_PASSWORD ?? "admin12345";
   const adminName = process.env.ADMIN_NAME ?? "Administrator";
-  const counterEmail = process.env.COUNTER_EMAIL ?? "counter@example.com";
+  const counterEmail = process.env.COUNTER_EMAIL ?? "counter@zakatbantu.my";
   const counterPassword = process.env.COUNTER_PASSWORD ?? "counter12345";
   const counterName = process.env.COUNTER_NAME ?? "Counter Staff";
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
   const counterPasswordHash = await bcrypt.hash(counterPassword, 12);
 
-  // Seed one user per role for testing
+  // Seed users across different roles for testing
   const usersPerRole = [
     { email: adminEmail, name: adminName, role: "admin", password: adminPassword },
-    { email: "eksekutif@example.com", name: "Eksekutif Pemprosesan", role: "eksekutif pemprosesan", password: adminPassword },
-    { email: "penyelia@example.com", name: "Penyelia", role: "penyelia", password: adminPassword },
+    { email: "eksekutif@zakatbantu.my", name: "Eksekutif Pemprosesan", role: "eksekutif pemprosesan", password: adminPassword },
+    { email: "penyelia@zakatbantu.my", name: "Penyelia", role: "penyelia", password: adminPassword },
+    { email: "editor@zakatbantu.my", name: "Ahmad Razif", role: "editor", password: adminPassword },
+    { email: "auditor@zakatbantu.my", name: "Siti Nurhaliza", role: "auditor", password: adminPassword },
+    { email: "viewer@zakatbantu.my", name: "Mohd Faizal", role: "viewer", password: adminPassword },
+    { email: "eksekutif2@zakatbantu.my", name: "Nurul Izzah", role: "eksekutif pemprosesan", password: adminPassword },
+    { email: "penyelia2@zakatbantu.my", name: "Kamal Hisham", role: "penyelia", password: adminPassword },
   ];
 
   for (const u of usersPerRole) {
@@ -233,6 +238,10 @@ async function main() {
       name: "admin",
       description: "Full system access",
       permissions: [
+        "pembayar.view", "pembayar.create", "pembayar.edit", "pembayar.delete",
+        "spg.view", "spg.create", "spg.edit",
+        "kaunter.view", "kaunter.create", "kaunter.reconcile",
+        "zakat.view", "zakat.create", "zakat.edit", "zakat.delete",
         "posts.view", "posts.create", "posts.edit", "posts.delete",
         "pages.view", "pages.create", "pages.edit", "pages.delete",
         "media.view", "media.upload", "media.delete",
@@ -242,12 +251,15 @@ async function main() {
         "menus.view", "menus.edit",
         "integration.view", "integration.upload", "integration.process",
         "integration.reconcile", "integration.exceptions", "integration.reports",
+        "development.view",
       ],
     },
     {
       name: "eksekutif pemprosesan",
       description: "Executive Processing - process uploads, reconcile, view reports (Integration 3rd Party)",
       permissions: [
+        "pembayar.view",
+        "spg.view",
         "integration.view", "integration.upload", "integration.process",
         "integration.reconcile", "integration.reports",
       ],
@@ -256,8 +268,47 @@ async function main() {
       name: "penyelia",
       description: "Supervisor - review exceptions, approve/reprocess transactions (Integration 3rd Party)",
       permissions: [
+        "pembayar.view", "pembayar.edit",
+        "spg.view", "spg.edit",
         "integration.view", "integration.upload", "integration.process",
         "integration.reconcile", "integration.exceptions", "integration.reports",
+      ],
+    },
+    {
+      name: "editor",
+      description: "Content editor - manage posts, pages, and media",
+      permissions: [
+        "posts.view", "posts.create", "posts.edit", "posts.delete",
+        "pages.view", "pages.create", "pages.edit", "pages.delete",
+        "media.view", "media.upload", "media.delete",
+        "menus.view", "menus.edit",
+      ],
+    },
+    {
+      name: "auditor",
+      description: "Auditor - read-only access to all modules for review and compliance",
+      permissions: [
+        "pembayar.view", "spg.view", "kaunter.view", "zakat.view",
+        "posts.view", "pages.view", "media.view",
+        "users.view", "roles.view", "settings.view",
+        "integration.view", "integration.reports",
+      ],
+    },
+    {
+      name: "viewer",
+      description: "Viewer - basic read-only access to content",
+      permissions: [
+        "pembayar.view", "spg.view",
+        "posts.view", "pages.view", "media.view",
+      ],
+    },
+    {
+      name: "counter",
+      description: "Counter staff - manage counter collections and bank reconciliation",
+      permissions: [
+        "pembayar.view", "pembayar.create",
+        "kaunter.view", "kaunter.create", "kaunter.reconcile",
+        "zakat.view",
       ],
     },
   ];
@@ -1389,7 +1440,7 @@ async function main() {
     }
   }
 
-  console.log("Seeded users per role: admin@example.com (admin), eksekutif@example.com (eksekutif pemprosesan), penyelia@example.com (penyelia)");
+  console.log("Seeded users per role: admin@zakatbantu.my (admin), eksekutif@zakatbantu.my (eksekutif pemprosesan), penyelia@zakatbantu.my (penyelia)");
   console.log(`Seeded admin user: ${adminEmail}`);
   console.log(`Seeded counter user: ${counterEmail}`);
   console.log(`Seeded ${samplePosts.length} sample posts`);

@@ -21,7 +21,7 @@ const groups: Group[] = [
   {
     label: "Auth",
     endpoints: [
-      { method: "POST", path: "/api/auth/login", summary: "Login and create session", auth: "public", body: '{ "email": "admin@example.com", "password": "admin12345" }' },
+      { method: "POST", path: "/api/auth/login", summary: "Login and create session", auth: "public", body: '{ "email": "admin@zakatbantu.my", "password": "admin12345" }' },
       { method: "POST", path: "/api/auth/logout", summary: "Logout and clear session", auth: "auth+csrf" },
       { method: "GET", path: "/api/auth/me", summary: "Get current user and csrf token", auth: "auth" },
     ],

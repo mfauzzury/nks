@@ -4,11 +4,18 @@ import path from "node:path";
 dotenv.config();
 
 const rootDir = process.cwd();
-const configuredCorsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5174")
+const configuredCorsOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-const defaultPortalOrigins = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"];
+const defaultPortalOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
+];
 const corsOrigins = Array.from(new Set([...configuredCorsOrigins, ...defaultPortalOrigins]));
 
 export const env = {
