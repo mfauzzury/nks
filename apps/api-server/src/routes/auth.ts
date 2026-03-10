@@ -100,6 +100,10 @@ async function userPayloadWithPermissions(
   // Admin role gets all known permissions if not in Role table
   if (user.role === "admin" && permissions.length === 0) {
     permissions = [
+      "pembayar.view", "pembayar.create", "pembayar.edit", "pembayar.delete",
+      "spg.view", "spg.create", "spg.edit",
+      "kaunter.view", "kaunter.create", "kaunter.reconcile",
+      "zakat.view", "zakat.create", "zakat.edit", "zakat.delete",
       "posts.view", "posts.create", "posts.edit", "posts.delete",
       "pages.view", "pages.create", "pages.edit", "pages.delete",
       "media.view", "media.upload", "media.delete",
@@ -109,6 +113,7 @@ async function userPayloadWithPermissions(
       "menus.view", "menus.edit",
       "integration.view", "integration.upload", "integration.process",
       "integration.reconcile", "integration.exceptions", "integration.reports",
+      "development.view",
     ];
   }
   return {

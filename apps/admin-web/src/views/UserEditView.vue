@@ -10,6 +10,11 @@ import {
   Upload,
   Trash2,
   ArrowLeft,
+  Shield,
+  ChevronRight,
+  Settings,
+  Check,
+  X,
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
@@ -53,6 +58,34 @@ const userInitials = computed(() => {
     .toUpperCase()
     .slice(0, 2);
 });
+
+// Matched role and permissions
+const matchedRole = computed(() => roles.value.find((r) => r.name === profileForm.value.role));
+const userPermissions = computed(() => matchedRole.value?.permissions ?? []);
+
+const allPermissions = [
+  "pembayar.view", "pembayar.create", "pembayar.edit", "pembayar.delete",
+  "spg.view", "spg.create", "spg.edit",
+  "kaunter.view", "kaunter.create", "kaunter.reconcile",
+  "zakat.view", "zakat.create", "zakat.edit", "zakat.delete",
+  "posts.view", "posts.create", "posts.edit", "posts.delete",
+  "pages.view", "pages.create", "pages.edit", "pages.delete",
+  "media.view", "media.upload", "media.delete",
+  "users.view", "users.create", "users.edit", "users.delete",
+  "roles.view", "roles.create", "roles.edit", "roles.delete",
+  "settings.view", "settings.edit",
+  "menus.view", "menus.edit",
+  "integration.view", "integration.upload", "integration.process",
+  "integration.reconcile", "integration.exceptions", "integration.reports",
+  "development.view",
+];
+
+const groupedPermissions = allPermissions.reduce<Record<string, string[]>>((acc, p) => {
+  const group = p.split(".")[0];
+  if (!acc[group]) acc[group] = [];
+  acc[group].push(p);
+  return acc;
+}, {});
 
 const pageTitle = computed(() => {
   if (isNew.value) return "New User";
@@ -214,18 +247,21 @@ onMounted(load);
 <template>
   <AdminLayout>
     <div class="mx-auto max-w-7xl space-y-4">
+      <!-- Breadcrumb -->
+      <nav v-if="!isSelf" class="flex items-center gap-1.5 text-sm text-slate-400">
+        <router-link to="/settings" class="flex items-center gap-1 hover:text-slate-600">
+          <Settings class="h-3.5 w-3.5" />
+          Settings
+        </router-link>
+        <ChevronRight class="h-3.5 w-3.5" />
+        <router-link to="/settings/users" class="hover:text-slate-600">Users</router-link>
+        <ChevronRight class="h-3.5 w-3.5" />
+        <span class="font-medium text-slate-700">{{ isNew ? 'New' : profileForm.name }}</span>
+      </nav>
+
       <!-- ───── Page Header ───── -->
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <router-link
-            to="/settings/users"
-            class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            v-if="!isSelf"
-          >
-            <ArrowLeft class="h-4 w-4" />
-          </router-link>
-          <h1 class="page-title">{{ pageTitle }}</h1>
-        </div>
+        <h1 class="page-title">{{ pageTitle }}</h1>
       </div>
 
       <div v-if="!loading" class="grid gap-4 lg:grid-cols-[1fr_280px]">
@@ -316,6 +352,47 @@ onMounted(load);
                   {{ isNew ? (savingProfile ? 'Creating...' : 'Create User') : (savingProfile ? 'Saving...' : 'Save Changes') }}
                 </button>
               </div>
+            </div>
+          </article>
+
+          <!-- ── Access & Permissions ── -->
+          <article v-if="!isNew" class="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+              <div class="flex items-center gap-2">
+                <Shield class="h-4 w-4 text-indigo-600" />
+                <h2 class="text-sm font-semibold text-slate-900">Access & Permissions</h2>
+              </div>
+              <span v-if="matchedRole" class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium capitalize text-indigo-700">
+                {{ matchedRole.name }}
+              </span>
+            </div>
+            <div class="p-4">
+              <p v-if="matchedRole" class="mb-3 text-xs text-slate-400">{{ matchedRole.description }}</p>
+              <p v-else class="mb-3 text-xs text-slate-400">No matching role found for "{{ profileForm.role }}"</p>
+
+              <div class="rounded-lg border border-slate-200 divide-y divide-slate-100">
+                <div v-for="(perms, group) in groupedPermissions" :key="group" class="px-3 py-2">
+                  <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ group }}</p>
+                  <div class="flex flex-wrap gap-1.5">
+                    <span
+                      v-for="perm in perms"
+                      :key="perm"
+                      class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium"
+                      :class="userPermissions.includes(perm)
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-slate-50 text-slate-300'"
+                    >
+                      <Check v-if="userPermissions.includes(perm)" class="h-3 w-3" />
+                      <X v-else class="h-3 w-3" />
+                      {{ perm.split('.')[1] }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p class="mt-3 text-[11px] text-slate-400">
+                {{ userPermissions.length }} of {{ allPermissions.length }} permissions granted
+              </p>
             </div>
           </article>
 
