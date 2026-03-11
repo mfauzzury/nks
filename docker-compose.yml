@@ -7,6 +7,9 @@
 #
 # Coolify: Pasang domain nks.sena.my pada admin-web dan nks-api.sena.my pada api-server.
 # Port 80 mungkin sudah digunakan di host — admin-web guna 18080:80 (host:container).
+#
+# PENTING: DATABASE_URL mesti diset dalam Coolify → Environment Variables (bukan dalam
+# .env repo kerana .env tidak di-commit). Tanpa DATABASE_URL, API akan loop "empty string".
 # =============================================================================
 
 services:
@@ -18,8 +21,7 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
-    env_file:
-      - apps/api-server/.env
+    # Jangan guna env_file — .env tidak dalam git; set semua dalam Coolify Environment Variables
     environment:
       PORT: 4000
       NODE_ENV: production
@@ -39,8 +41,8 @@ services:
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
       # PGP untuk fail JAN
       JAN_PGP_PASSWORD: "${JAN_PGP_PASSWORD:-}"
-      # DB — wajib. Host dalam URL mesti boleh dicapai DARI DALAM container (jangan guna
-      # localhost jika MySQL di host; guna IP host atau nama perkhidmatan Docker).
+      # DB — wajib. Set dalam Coolify Environment Variables (contoh nilai di bawah).
+      # Host mesti boleh dicapai dari dalam container (IP atau hostname, bukan localhost).
       DATABASE_URL: "${DATABASE_URL}"
     volumes:
       - api_uploads:/app/apps/api-server/uploads

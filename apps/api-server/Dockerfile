@@ -32,5 +32,5 @@ RUN mkdir -p uploads
 ENV NODE_ENV=production
 EXPOSE 4000
 
-# Wait for MySQL, push schema, seed, start. Jika gagal sambung, ralat sebenar akan keluar dalam log.
-CMD ["sh", "-c", "until npx prisma db push 2>&1; do echo 'Waiting for MySQL (sahkan DATABASE_URL dan kebolehcapaian dari container)...'; sleep 5; done && (cd /app && npm run db:seed) && node dist/server.js"]
+# Wait for MySQL, push schema, seed, start. Jika DATABASE_URL kosong, keluar dengan mesej jelas.
+CMD ["sh", "-c", "if [ -z \"$DATABASE_URL\" ]; then echo 'ERROR: DATABASE_URL is empty. Set it in Coolify → Application → Environment Variables (Runtime). Example: mysql://user:pass@host:3306/dbname'; exit 1; fi; until npx prisma db push 2>&1; do echo 'Waiting for MySQL (sahkan DATABASE_URL dan kebolehcapaian dari container)...'; sleep 5; done && (cd /app && npm run db:seed) && node dist/server.js"]
