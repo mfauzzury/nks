@@ -21,7 +21,8 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
-    # Jangan guna env_file — .env tidak dalam git; set semua dalam Coolify Environment Variables
+    env_file:
+      - apps/api-server/.env
     environment:
       PORT: 4000
       NODE_ENV: production
