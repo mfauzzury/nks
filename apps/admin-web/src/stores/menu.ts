@@ -1,98 +1,108 @@
 import { defineStore } from "pinia";
-import { DEFAULT_MENU, type AdminMenuPrefs, type MenuGroupDef, type MenuItemDef } from "@/config/admin-menu";
+import { DEFAULT_MENU, type AdminMenuPrefs, type MenuGroupDef, type MenuNode } from "@/config/admin-menu";
 import { getAdminMenuPrefs, saveAdminMenuPrefs } from "@/api/cms";
-import { useAuthStore } from "@/stores/auth";
 
-function mergePrefsWithDefaults(prefs: AdminMenuPrefs): AdminMenuPrefs {
-  const allGroupIds = DEFAULT_MENU.map((g) => g.id);
-  const groupOrder = [...(prefs.groupOrder || [])];
-  for (const gid of allGroupIds) {
-    if (!groupOrder.includes(gid)) groupOrder.push(gid);
-  }
-  const itemOrder: Record<string, string[]> = { ...(prefs.itemOrder || {}) };
-  for (const group of DEFAULT_MENU) {
-    const allItemIds = group.items.map((i) => i.id);
-    const saved = itemOrder[group.id] || [];
-    const merged = [...saved];
-    for (const iid of allItemIds) {
-      if (!merged.includes(iid)) merged.push(iid);
-    }
-    itemOrder[group.id] = merged.filter((iid) => allItemIds.includes(iid));
-  }
+type LegacyPrefs = {
+  groupOrder: string[];
+  itemOrder: Record<string, string[]>;
+  hidden: string[];
+  hiddenGroups?: string[];
+};
+
+function normalizePrefs(raw: AdminMenuPrefs | LegacyPrefs | null): AdminMenuPrefs | null {
+  if (!raw) return null;
+
+  const prefs = raw as Partial<AdminMenuPrefs> & LegacyPrefs;
   return {
-    groupOrder: groupOrder.filter((gid) => allGroupIds.includes(gid)),
-    itemOrder,
-    hidden: (prefs.hidden || []).filter((id) =>
-      DEFAULT_MENU.some((g) => g.items.some((i) => i.id === id)),
-    ),
-    hiddenGroups: (prefs.hiddenGroups || []).filter((gid) => allGroupIds.includes(gid)),
+    groupOrder: prefs.groupOrder || [],
+    itemOrder: prefs.itemOrder || {},
+    childOrder: prefs.childOrder || {},
+    grandchildOrder: prefs.grandchildOrder || {},
+    hidden: prefs.hidden || [],
+    hiddenChildren: prefs.hiddenChildren || [],
+    hiddenGrandchildren: prefs.hiddenGrandchildren || [],
+    hiddenGroups: prefs.hiddenGroups || [],
   };
 }
 
-function resolveMenu(prefs: AdminMenuPrefs | null): MenuGroupDef[] {
+function orderByIds<T extends { id: string }>(items: T[], order: string[]): T[] {
+  const map = new Map(items.map((item) => [item.id, item]));
+  const ordered: T[] = [];
+
+  for (const id of order) {
+    const entry = map.get(id);
+    if (entry) {
+      ordered.push(entry);
+      map.delete(id);
+    }
+  }
+
+  for (const entry of map.values()) ordered.push(entry);
+  return ordered;
+}
+
+function resolveChildren(children: MenuNode[] | undefined, prefs: AdminMenuPrefs, parentId: string): MenuNode[] {
+  if (!children || children.length === 0) return [];
+
+  const childOrder = prefs.childOrder[parentId] || [];
+  const orderedChildren = orderByIds(children, childOrder)
+    .filter((child) => !prefs.hiddenChildren.includes(child.id))
+    .map((child) => {
+      const orderedGrandchildren = orderByIds(child.children || [], prefs.grandchildOrder[child.id] || [])
+        .filter((grandchild) => !prefs.hiddenGrandchildren.includes(grandchild.id));
+
+      return {
+        ...child,
+        children: orderedGrandchildren,
+      };
+    });
+
+  return orderedChildren;
+}
+
+function resolveMenu(prefsRaw: AdminMenuPrefs | null): MenuGroupDef[] {
+  if (!prefsRaw) return DEFAULT_MENU;
+
+  const prefs = normalizePrefs(prefsRaw);
   if (!prefs) return DEFAULT_MENU;
 
-  const merged = mergePrefsWithDefaults(prefs);
   const groupMap = new Map(DEFAULT_MENU.map((g) => [g.id, g]));
-  const ordered: MenuGroupDef[] = [];
+  const orderedGroups: MenuGroupDef[] = [];
 
-  for (const gid of merged.groupOrder) {
-    if (groupMap.has(gid)) {
-      ordered.push(groupMap.get(gid)!);
-      groupMap.delete(gid);
+  for (const groupId of prefs.groupOrder) {
+    const group = groupMap.get(groupId);
+    if (group) {
+      orderedGroups.push(group);
+      groupMap.delete(groupId);
     }
   }
-  for (const g of groupMap.values()) {
-    const defaultIdx = DEFAULT_MENU.findIndex((dg) => dg.id === g.id);
+
+  for (const group of groupMap.values()) {
+    const defaultIdx = DEFAULT_MENU.findIndex((g) => g.id === group.id);
     let insertAt = 0;
-    for (let i = 0; i < ordered.length; i++) {
-      const orderedIdx = DEFAULT_MENU.findIndex((dg) => dg.id === ordered[i].id);
+    for (let i = 0; i < orderedGroups.length; i++) {
+      const orderedIdx = DEFAULT_MENU.findIndex((g) => g.id === orderedGroups[i].id);
       if (orderedIdx < defaultIdx) insertAt = i + 1;
     }
-    ordered.splice(insertAt, 0, g);
+    orderedGroups.splice(insertAt, 0, group);
   }
 
-  const hiddenGroups = merged.hiddenGroups || [];
-
-  return ordered
-    .filter((g) => !hiddenGroups.includes(g.id))
+  return orderedGroups
+    .filter((group) => !prefs.hiddenGroups.includes(group.id))
     .map((group) => {
-      const itemMap = new Map(group.items.map((i) => [i.id, i]));
-      const sortedItems: typeof group.items = [];
-      const itemOrderList = merged.itemOrder[group.id] || [];
-
-      for (const iid of itemOrderList) {
-        if (itemMap.has(iid)) {
-          sortedItems.push(itemMap.get(iid)!);
-          itemMap.delete(iid);
-        }
-      }
-      for (const i of itemMap.values()) sortedItems.push(i);
+      const orderedItems = orderByIds(group.items, prefs.itemOrder[group.id] || [])
+        .filter((item) => !prefs.hidden.includes(item.id))
+        .map((item) => ({
+          ...item,
+          children: resolveChildren(item.children, prefs, item.id),
+        }));
 
       return {
         ...group,
-        items: sortedItems.filter((i) => !(merged.hidden || []).includes(i.id)),
+        items: orderedItems,
       };
     })
-    .filter((g) => g.items.length > 0);
-}
-
-function canSeeMenuItem(item: MenuItemDef, permissions: string[] | undefined): boolean {
-  if (!item.permission) return true;
-  if (!permissions) return false;
-  return permissions.includes(item.permission);
-}
-
-function filterMenuByPermissions(menu: MenuGroupDef[]): MenuGroupDef[] {
-  const auth = useAuthStore();
-  const permissions = auth.user?.permissions;
-
-  return menu
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => canSeeMenuItem(item, permissions)),
-    }))
-    .filter((g) => g.items.length > 0);
+    .filter((group) => group.items.length > 0);
 }
 
 export const useMenuStore = defineStore("menu", {
@@ -102,8 +112,7 @@ export const useMenuStore = defineStore("menu", {
   }),
   getters: {
     resolvedMenu(): MenuGroupDef[] {
-      const menu = resolveMenu(this.prefs);
-      return filterMenuByPermissions(menu);
+      return resolveMenu(this.prefs);
     },
   },
   actions: {
@@ -111,7 +120,7 @@ export const useMenuStore = defineStore("menu", {
       if (this.initialized) return;
       try {
         const res = await getAdminMenuPrefs();
-        this.prefs = res.data;
+        this.prefs = normalizePrefs(res.data);
       } catch {
         // use defaults
       }
@@ -119,7 +128,7 @@ export const useMenuStore = defineStore("menu", {
     },
     async save(prefs: AdminMenuPrefs) {
       await saveAdminMenuPrefs(prefs);
-      this.prefs = prefs;
+      this.prefs = normalizePrefs(prefs);
     },
   },
 });

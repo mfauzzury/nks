@@ -11,9 +11,13 @@ import {
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { deletePost, listPosts } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import type { Post } from "@/types";
 
 const router = useRouter();
+const toast = useToast();
+const confirmDialog = useConfirmDialog();
 const rows = ref<Post[]>([]);
 const q = ref("");
 const page = ref(1);
@@ -50,8 +54,20 @@ async function nextPage() {
 }
 
 async function remove(id: number) {
-  await deletePost(id);
-  await load();
+  const allowed = await confirmDialog.confirm({
+    title: "Delete post?",
+    message: "This action cannot be undone.",
+    confirmText: "Delete",
+    destructive: true,
+  });
+  if (!allowed) return;
+  try {
+    await deletePost(id);
+    await load();
+    toast.success("Post deleted");
+  } catch (e) {
+    toast.error("Delete failed", e instanceof Error ? e.message : "Unable to delete post.");
+  }
 }
 
 function statusColor(status: string) {

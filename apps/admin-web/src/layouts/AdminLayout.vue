@@ -4,9 +4,11 @@ import { useRoute, useRouter } from "vue-router";
 import { Bell, Check, ChevronDown, LogOut, Settings, Shield } from "lucide-vue-next";
 
 import type { ThemeColor } from "@/types";
+import type { MenuItemDef, MenuNode } from "@/config/admin-menu";
 import { useSidebarCollapse } from "@/composables/useSidebarCollapse";
+import { useToast } from "@/composables/useToast";
+import AppToastRegion from "@/components/AppToastRegion.vue";
 
-import { usePendingActions } from "@/composables/usePendingActions";
 import { useAuthStore } from "@/stores/auth";
 import { useMenuStore } from "@/stores/menu";
 import { useSiteStore } from "@/stores/site";
@@ -19,15 +21,8 @@ const auth = useAuthStore();
 const menuStore = useMenuStore();
 const site = useSiteStore();
 const uiTheme = useUiThemeStore();
-const { isCollapsed, toggle: toggleSidebar } = useSidebarCollapse();
-const { pendingByItemId, pendingByRoute, refresh: refreshPending } = usePendingActions();
-
-function hasPendingForItem(item: { id: string; to?: string; children?: { to: string }[] }) {
-  if (pendingByItemId.value[item.id]) return true;
-  if (item.to && pendingByRoute.value[item.to]) return true;
-  if (item.children?.some((c) => pendingByRoute.value[c.to])) return true;
-  return false;
-}
+const toast = useToast();
+const { isCollapsed, isCompact, toggle: toggleSidebar, toggleCompact } = useSidebarCollapse();
 
 const settingsOpen = ref(false);
 const settingsDropdownRef = ref<HTMLElement | null>(null);
@@ -68,6 +63,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleDocumentClick);
   document.removeEventListener("keydown", handleEscape);
+  if (showTitleTimer !== null) {
+    window.clearTimeout(showTitleTimer);
+    showTitleTimer = null;
+  }
 });
 
 const openMenus = reactive<Record<string, boolean>>({});
@@ -93,20 +92,46 @@ function truncateHeaderText(value: string, max = HEADER_TEXT_MAX) {
 const headerSiteTitle = computed(() => truncateHeaderText(site.siteTitle || ""));
 const headerUserName = computed(() => truncateHeaderText(auth.user?.name || "Admin"));
 const headerUserRole = computed(() => truncateHeaderText(userRoleLabel.value));
+const hasActiveToast = computed(() => toast.toasts.value.length > 0);
+const showSiteTitle = ref(true);
+const TOAST_EXIT_MS = 1500;
+let showTitleTimer: number | null = null;
+
+const rowBaseClass = computed(() =>
+  isCompact.value
+    ? "gap-2.5 px-3 py-1 text-[13px] leading-tight"
+    : "gap-2.5 px-3 py-1.5 text-sm",
+);
+
+const collapsedRowBaseClass = computed(() =>
+  isCompact.value
+    ? "md:justify-center md:px-0 md:py-1.5 md:rounded-none gap-2.5 px-3 py-1"
+    : "md:justify-center md:px-0 md:py-2.5 md:rounded-none gap-2.5 px-3 py-1.5",
+);
+
+const childRowClass = computed(() =>
+  isCompact.value
+    ? "block rounded-md px-3 py-0.5 text-[13px] leading-tight transition-all hover:bg-[var(--accent-50)]"
+    : "block rounded-md px-3 py-1 text-sm transition-all hover:bg-[var(--accent-50)]",
+);
 
 async function signOut() {
-  await auth.signOut();
-  router.push("/login");
+  try {
+    await auth.signOut();
+    toast.success("Signed out", "You have been logged out.");
+    router.push("/admin/login");
+  } catch (e) {
+    toast.error("Sign out failed", e instanceof Error ? e.message : "Please try again.");
+  }
 }
 
-function isActive(path: string, exact = false): boolean {
+function isActive(path: string): boolean {
   if (path === "/") return route.path === "/";
-  if (exact) return route.path === path;
-  return route.path === path || route.path.startsWith(path + "/");
+  return route.path.startsWith(path);
 }
 
-function itemClass(path: string, exact = false) {
-  if (isActive(path, exact)) {
+function itemClass(path: string) {
+  if (isActive(path)) {
     return "border border-[var(--accent-200)] bg-[var(--accent-50)] font-medium text-[var(--accent-700)]";
   }
   return "border border-transparent text-slate-900";
@@ -123,43 +148,52 @@ function toggleMenu(id: string) {
   openMenus[id] = !openMenus[id];
 }
 
-function isChildActive(item: { to: string; children?: { to: string }[] }): boolean {
-  if (isActive(item.to)) return true;
-  if (!item.children) return false;
-  return item.children.some((child) => route.path.startsWith(child.to));
+function isNodeActive(node: { to: string; children?: MenuNode[] }): boolean {
+  if (isActive(node.to)) return true;
+  if (!node.children || node.children.length === 0) return false;
+  return node.children.some((child) => isNodeActive(child));
 }
 
 function syncOpenMenus() {
+  const syncNode = (node: MenuNode | MenuItemDef) => {
+    if (node.children && node.children.length > 0 && isNodeActive(node)) {
+      openMenus[node.id] = true;
+      for (const child of node.children) syncNode(child);
+    }
+  };
+
   for (const group of menuStore.resolvedMenu) {
     for (const item of group.items) {
-      if (item.children && item.children.length > 0 && isChildActive(item)) {
-        openMenus[item.id] = true;
-      }
+      syncNode(item);
     }
   }
 }
 
 watch(() => route.path, syncOpenMenus, { immediate: true });
-
+watch(() => menuStore.resolvedMenu, syncOpenMenus, { deep: true });
 watch(
-  () => route.path,
-  (path) => {
-    if (
-      path.startsWith("/spg/payments") ||
-      path.startsWith("/duplicates") ||
-      path.startsWith("/integration/3rd-party/batch-processing") ||
-      path.startsWith("/integration/3rd-party/reconciliation") ||
-      path.startsWith("/integration/3rd-party/exceptions")
-    ) {
-      refreshPending();
+  hasActiveToast,
+  (active) => {
+    if (showTitleTimer !== null) {
+      window.clearTimeout(showTitleTimer);
+      showTitleTimer = null;
     }
+    if (active) {
+      showSiteTitle.value = false;
+      return;
+    }
+    showTitleTimer = window.setTimeout(() => {
+      showSiteTitle.value = true;
+      showTitleTimer = null;
+    }, TOAST_EXIT_MS);
   },
+  { immediate: true },
 );
 </script>
 
 <template>
   <div class="min-h-screen bg-[#f8f9fb]">
-    <header class="flex h-10 items-center justify-between border-b border-slate-200 bg-white px-5">
+    <header class="sticky top-0 z-40 flex h-10 items-center justify-between border-b border-slate-200 bg-white px-5">
       <div class="flex items-center gap-1">
         <div v-if="site.siteIconUrl" class="flex h-[18px] shrink-0 items-center justify-center overflow-hidden">
           <img :src="resolveUrl(site.siteIconUrl)" alt="Site icon" class="h-full w-auto object-contain" />
@@ -173,12 +207,18 @@ watch(
       </div>
 
       <div class="flex items-center self-stretch">
-        <span v-if="site.siteTitle" class="px-3 text-sm font-light text-slate-900">{{ headerSiteTitle }}</span>
-        <span v-if="site.siteTitle" class="h-full w-px bg-slate-200" />
+        <div
+          v-if="site.siteTitle && showSiteTitle"
+          class="flex h-full items-center overflow-hidden whitespace-nowrap"
+        >
+          <span class="px-4 text-sm font-light text-slate-900">{{ headerSiteTitle }}</span>
+          <span class="h-full w-px bg-slate-200" />
+        </div>
+        <AppToastRegion />
 
         <router-link
-          :to="'/settings/users/' + auth.user?.id"
-          class="group relative flex h-full items-center gap-2 px-3 transition-colors hover:bg-[var(--accent-600)]"
+          :to="'/admin/settings/users/' + auth.user?.id"
+          class="group relative flex h-full items-center gap-2 px-4 transition-colors hover:bg-[var(--accent-600)]"
         >
           <div
             class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--accent-600)] to-[var(--accent-500)] text-[10px] font-semibold text-white"
@@ -238,6 +278,24 @@ watch(
                 <Check v-if="uiTheme.themeColor === theme.value" class="h-3.5 w-3.5" />
               </button>
             </div>
+
+            <div class="mt-3 border-t border-slate-200 pt-3">
+              <button
+                class="flex w-full items-center justify-between rounded-md border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-[var(--accent-ring)]"
+                @click="toggleCompact"
+              >
+                <span>Compact sidebar</span>
+                <span
+                  class="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                  :class="isCompact ? 'bg-[var(--accent-600)]' : 'bg-slate-300'"
+                >
+                  <span
+                    class="inline-block h-3 w-3 transform rounded-full bg-white transition"
+                    :class="isCompact ? 'translate-x-3.5' : 'translate-x-0.5'"
+                  />
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -265,7 +323,7 @@ watch(
 
     <div class="flex flex-col md:flex-row">
       <aside
-        class="relative border-r border-slate-200 bg-slate-50/50 transition-[width] duration-300 ease-in-out"
+        class="relative flex flex-col border-r border-slate-200 bg-slate-50/50 transition-[width] duration-300 ease-in-out md:min-h-[calc(100vh-40px)]"
         :class="isCollapsed ? 'w-full md:w-14' : 'w-full md:w-64'"
       >
         <button
@@ -289,7 +347,7 @@ watch(
           </div>
         </div>
 
-        <nav class="p-3" :class="isCollapsed ? 'md:overflow-visible md:px-0 md:py-2' : ''">
+        <nav class="flex-1 p-3" :class="isCollapsed ? 'md:overflow-visible md:px-0 md:py-2' : ''">
           <div v-for="(group, gi) in menuStore.resolvedMenu" :key="group.id">
             <p
               v-if="group.label"
@@ -303,21 +361,20 @@ watch(
               <button
                 v-if="item.children && item.children.length > 0"
                 type="button"
-                class="group relative flex w-full items-center rounded-lg text-left text-sm font-medium transition-all hover:bg-[var(--accent-50)]"
+                class="group relative flex w-full items-center rounded-lg text-left font-medium transition-all hover:bg-[var(--accent-50)]"
                 :class="[
-                  isCollapsed ? 'md:justify-center md:px-0 md:py-2.5 md:rounded-none gap-2.5 px-3 py-1.5' : 'gap-2.5 px-3 py-1.5',
-                  isCollapsed && isChildActive(item) ? 'md:border md:border-[var(--accent-200)] md:bg-[var(--accent-50)] md:text-[var(--accent-700)] md:font-medium text-slate-900' : 'text-slate-900',
-                  isCollapsed ? '' : itemClass(isChildActive(item) ? route.path : item.to)
+                  isCollapsed ? collapsedRowBaseClass : rowBaseClass,
+                  isCollapsed && isNodeActive(item) ? 'md:border md:border-[var(--accent-200)] md:bg-[var(--accent-50)] md:text-[var(--accent-700)] md:font-medium text-slate-900' : 'text-slate-900',
+                  isCollapsed ? '' : itemClass(isNodeActive(item) ? route.path : item.to)
                 ]"
                 @click="isCollapsed ? toggleSidebar() : toggleMenu(item.id)"
               >
-                <span v-if="hasPendingForItem(item)" class="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 shrink-0 rounded-full bg-red-500" :class="isCollapsed ? 'md:left-1/2 md:-translate-x-1/2' : ''" />
                 <component
                   :is="item.icon"
                   class="shrink-0 transition-colors"
                   :class="[
                     isCollapsed ? 'md:h-5 md:w-5 h-4 w-4' : 'h-4 w-4',
-                    isCollapsed && isChildActive(item) ? 'md:text-[var(--accent-700)] text-slate-700' : isChildActive(item) ? 'text-slate-900' : 'text-slate-400 group-hover:text-[var(--accent-600)]'
+                    isCollapsed && isNodeActive(item) ? 'md:text-[var(--accent-700)] text-slate-700' : isNodeActive(item) ? 'text-slate-900' : 'text-slate-400 group-hover:text-[var(--accent-600)]'
                   ]"
                 />
                 <span class="flex-1" :class="isCollapsed ? 'md:hidden' : ''">{{ item.label }}</span>
@@ -336,20 +393,19 @@ watch(
               <router-link
                 v-else
                 :to="item.to"
-                class="group relative flex items-center rounded-lg text-sm font-medium transition-all hover:bg-[var(--accent-50)]"
+                class="group relative flex items-center rounded-lg font-medium transition-all hover:bg-[var(--accent-50)]"
                 :class="[
-                  isCollapsed ? 'md:justify-center md:px-0 md:py-2.5 md:rounded-none gap-2.5 px-3 py-1.5' : 'gap-2.5 px-3 py-1.5',
-                  isCollapsed && isActive(item.to, true) ? 'md:border md:border-[var(--accent-200)] md:bg-[var(--accent-50)] md:text-[var(--accent-700)] md:font-medium text-slate-900' : 'text-slate-900',
-                  isCollapsed ? '' : itemClass(item.to, true)
+                  isCollapsed ? collapsedRowBaseClass : rowBaseClass,
+                  isCollapsed && isActive(item.to) ? 'md:border md:border-[var(--accent-200)] md:bg-[var(--accent-50)] md:text-[var(--accent-700)] md:font-medium text-slate-900' : 'text-slate-900',
+                  isCollapsed ? '' : itemClass(item.to)
                 ]"
               >
-                <span v-if="hasPendingForItem(item)" class="absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 shrink-0 rounded-full bg-red-500" :class="isCollapsed ? 'md:left-1/2 md:-translate-x-1/2' : ''" />
                 <component
                   :is="item.icon"
                   class="shrink-0 transition-colors"
                   :class="[
                     isCollapsed ? 'md:h-5 md:w-5 h-4 w-4' : 'h-4 w-4',
-                    isCollapsed && isActive(item.to, true) ? 'md:text-[var(--accent-700)] text-slate-700' : isActive(item.to, true) ? 'text-slate-900' : 'text-slate-400 group-hover:text-[var(--accent-600)]'
+                    isCollapsed && isActive(item.to) ? 'md:text-[var(--accent-700)] text-slate-700' : isActive(item.to) ? 'text-slate-900' : 'text-slate-400 group-hover:text-[var(--accent-600)]'
                   ]"
                 />
                 <span class="flex-1" :class="isCollapsed ? 'md:hidden' : ''">{{ item.label }}</span>
@@ -365,16 +421,43 @@ watch(
                 v-if="item.children && item.children.length > 0 && openMenus[item.id] && !isCollapsed"
                 class="ml-5 mt-1 space-y-0.5 border-l-2 border-slate-200 pl-4"
               >
-                <router-link
-                  v-for="child in item.children"
-                  :key="child.to"
-                  :to="child.to"
-                  class="relative flex items-center gap-2 rounded-md px-3 py-1 text-sm transition-all hover:bg-[var(--accent-50)]"
-                  :class="childClass(child.to)"
-                >
-                  <span v-if="pendingByRoute[child.to]" class="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
-                  {{ child.label }}
-                </router-link>
+                <template v-for="child in item.children" :key="child.id">
+                  <button
+                    v-if="child.children && child.children.length > 0"
+                    type="button"
+                    class="flex w-full items-center rounded-md text-left transition-all hover:bg-[var(--accent-50)]"
+                    :class="[childRowClass, childClass(isNodeActive(child) ? route.path : child.to)]"
+                    @click="toggleMenu(child.id)"
+                  >
+                    <span class="flex-1">{{ child.label }}</span>
+                    <ChevronDown
+                      class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200"
+                      :class="{ '-rotate-90': !openMenus[child.id] }"
+                    />
+                  </button>
+
+                  <router-link
+                    v-else
+                    :to="child.to"
+                    :class="[childRowClass, childClass(child.to)]"
+                  >
+                    {{ child.label }}
+                  </router-link>
+
+                  <div
+                    v-if="child.children && child.children.length > 0 && openMenus[child.id]"
+                    class="ml-4 mt-1 space-y-0.5 border-l border-slate-200 pl-3"
+                  >
+                    <router-link
+                      v-for="grandchild in child.children"
+                      :key="grandchild.id"
+                      :to="grandchild.to"
+                      :class="[childRowClass, childClass(grandchild.to)]"
+                    >
+                      {{ grandchild.label }}
+                    </router-link>
+                  </div>
+                </template>
               </div>
             </div>
           </div>

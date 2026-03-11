@@ -12,6 +12,7 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useToast } from "@/composables/useToast";
 
 const form = ref({
   title: "",
@@ -25,6 +26,7 @@ const form = ref({
   seoTitle: "",
   seoDescription: "",
 });
+const toast = useToast();
 
 const touched = ref<{ title: boolean; slug: boolean }>({
   title: false,
@@ -55,7 +57,7 @@ function submit() {
   touched.value.title = true;
   touched.value.slug = true;
   if (titleError.value || slugError.value) return;
-  alert("Form submitted (demo)");
+  toast.success("Form submitted", "Demo action completed.");
 }
 
 const sectionLinks = [

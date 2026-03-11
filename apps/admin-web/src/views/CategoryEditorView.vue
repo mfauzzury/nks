@@ -9,9 +9,11 @@ import {
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { createCategory, getCategory, updateCategory } from "@/api/cms";
+import { useToast } from "@/composables/useToast";
 
 const route = useRoute();
 const router = useRouter();
+const toast = useToast();
 
 const id = computed(() => Number(route.params.id || 0));
 const isEdit = computed(() => id.value > 0);
@@ -36,13 +38,18 @@ async function save() {
     description: description.value || undefined,
   };
 
-  if (isEdit.value) {
-    await updateCategory(id.value, payload);
-  } else {
-    await createCategory(payload);
+  try {
+    if (isEdit.value) {
+      await updateCategory(id.value, payload);
+      toast.success("Category updated");
+    } else {
+      await createCategory(payload);
+      toast.success("Category created");
+    }
+    router.push("/admin/categories");
+  } catch (e) {
+    toast.error("Save failed", e instanceof Error ? e.message : "Unable to save category.");
   }
-
-  router.push("/categories");
 }
 
 onMounted(load);
@@ -89,7 +96,7 @@ onMounted(load);
         </button>
         <button
           class="flex items-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-          @click="router.push('/categories')"
+          @click="router.push('/admin/categories')"
         >
           <X class="h-4 w-4" />
           Cancel

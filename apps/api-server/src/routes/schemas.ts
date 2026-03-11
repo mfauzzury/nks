@@ -71,7 +71,11 @@ export const roleInputSchema = z.object({
 export const adminMenuPrefsSchema = z.object({
   groupOrder: z.array(z.string()),
   itemOrder: z.record(z.string(), z.array(z.string())),
+  childOrder: z.record(z.string(), z.array(z.string())).default({}),
+  grandchildOrder: z.record(z.string(), z.array(z.string())).default({}),
   hidden: z.array(z.string()),
+  hiddenChildren: z.array(z.string()).default([]),
+  hiddenGrandchildren: z.array(z.string()).default([]),
   hiddenGroups: z.array(z.string()).default([]),
 });
 

@@ -4,6 +4,7 @@ import { CheckCircle2, Globe, Image, Save, Upload } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { getSettings, updateSettings, uploadMedia } from "@/api/cms";
+import { useToast } from "@/composables/useToast";
 import { API_BASE_URL } from "@/env";
 import type { SettingsPayload } from "@/types";
 
@@ -23,6 +24,7 @@ const form = ref<SettingsPayload>({
   footerText: "",
   frontPageId: null,
 });
+const toast = useToast();
 
 const saving = ref(false);
 const saved = ref(false);
@@ -55,8 +57,10 @@ async function onLogoUpload(event: Event) {
   try {
     const response = await uploadMedia(file);
     form.value.webfrontLogoUrl = response.data.url;
+    toast.success("Logo uploaded");
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to upload logo";
+    toast.error("Upload failed", error.value);
   } finally {
     uploadingLogo.value = false;
     (event.target as HTMLInputElement).value = "";
@@ -69,9 +73,11 @@ async function save() {
   try {
     await updateSettings(form.value);
     saved.value = true;
+    toast.success("Webfront settings saved");
     setTimeout(() => { saved.value = false; }, 2000);
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to save Webfront settings";
+    toast.error("Save failed", error.value);
   } finally {
     saving.value = false;
   }

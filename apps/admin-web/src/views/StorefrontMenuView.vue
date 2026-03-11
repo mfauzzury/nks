@@ -4,6 +4,8 @@ import { Check, ChevronDown, ChevronUp, Link2, Plus, Save, Trash2 } from "lucide
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { getStorefrontMenu, listPages, saveStorefrontMenu } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import type { Page, StorefrontMenuItem } from "@/types";
 
 const saving = ref(false);
@@ -11,6 +13,8 @@ const saved = ref(false);
 const error = ref("");
 const items = ref<StorefrontMenuItem[]>([]);
 const pages = ref<Page[]>([]);
+const confirmDialog = useConfirmDialog();
+const toast = useToast();
 
 function createId() {
   return `menu_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -29,13 +33,21 @@ function addItem() {
   items.value.push({ id: createId(), label: "", href: "/", parentId: null, openInNewTab: false });
 }
 
-function removeItem(index: number) {
+async function removeItem(index: number) {
+  const allowed = await confirmDialog.confirm({
+    title: "Remove menu item?",
+    message: "This removes the item from the current draft list.",
+    confirmText: "Remove",
+    destructive: true,
+  });
+  if (!allowed) return;
   const id = items.value[index]?.id;
   if (!id) return;
   items.value.splice(index, 1);
   for (const item of items.value) {
     if (item.parentId === id) item.parentId = null;
   }
+  toast.info("Menu item removed");
 }
 
 function moveItem(index: number, direction: "up" | "down") {
@@ -94,9 +106,11 @@ async function save() {
     const response = await saveStorefrontMenu(normalize(items.value));
     items.value = response.data;
     saved.value = true;
+    toast.success("Storefront menu saved");
     setTimeout(() => { saved.value = false; }, 2000);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to save menus";
+    toast.error("Save failed", error.value);
   } finally {
     saving.value = false;
   }

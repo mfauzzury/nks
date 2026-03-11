@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, unref } from "vue";
+import { onMounted, ref } from "vue";
 import {
   Settings,
   Globe,
@@ -14,28 +14,35 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
-import { useDraggableModal } from "@/composables/useDraggableModal";
-import { getSettings, updateSettings, uploadMedia, listMedia } from "@/api/cms";
+import { getSettings, updateSettings, uploadMedia, listMedia, listPages } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import { API_BASE_URL } from "@/env";
 import { useSiteStore } from "@/stores/site";
 import { useRoute } from "vue-router";
 import type { Media, SettingsPayload } from "@/types";
+import type { Page } from "@/types";
 
 const site = useSiteStore();
 const route = useRoute();
+const toast = useToast();
+const confirmDialog = useConfirmDialog();
 
 const form = ref<SettingsPayload>({
   siteTitle: "",
   tagline: "",
+  webfrontTitle: "",
+  webfrontTagline: "",
   titleFormat: "%page% | %site%",
   metaDescription: "",
   siteIconUrl: "",
+  webfrontLogoUrl: "",
   sidebarLogoUrl: "",
-  portalLogoUrl: "",
   faviconUrl: "",
   language: "en",
   timezone: "UTC",
   footerText: "",
+  frontPageId: null,
 });
 
 const saved = ref(false);
@@ -43,14 +50,13 @@ const saving = ref(false);
 const error = ref("");
 const uploadingSiteIcon = ref(false);
 const uploadingSidebarLogo = ref(false);
-const uploadingPortalLogo = ref(false);
 const uploadingFavicon = ref(false);
 
 const mediaPickerOpen = ref(false);
-const mediaPickerTarget = ref<"siteIconUrl" | "faviconUrl" | "sidebarLogoUrl" | "portalLogoUrl">("siteIconUrl");
+const mediaPickerTarget = ref<"siteIconUrl" | "faviconUrl" | "sidebarLogoUrl">("siteIconUrl");
 const mediaPickerItems = ref<Media[]>([]);
 const mediaPickerLoading = ref(false);
-const dragMediaPicker = useDraggableModal();
+const publishedPages = ref<Page[]>([]);
 
 async function openMediaPicker(target: typeof mediaPickerTarget.value) {
   mediaPickerTarget.value = target;
@@ -69,7 +75,6 @@ async function openMediaPicker(target: typeof mediaPickerTarget.value) {
 function selectFromLibrary(item: Media) {
   form.value[mediaPickerTarget.value] = item.url;
   mediaPickerOpen.value = false;
-  dragMediaPicker.resetPosition();
 }
 
 function resolveUrl(url: string) {
@@ -86,8 +91,10 @@ async function onSiteIconUpload(event: Event) {
   try {
     const res = await uploadMedia(file);
     form.value.siteIconUrl = res.data.url;
+    toast.success("Site icon uploaded");
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to upload site icon";
+    toast.error("Upload failed", error.value);
   } finally {
     uploadingSiteIcon.value = false;
     (event.target as HTMLInputElement).value = "";
@@ -102,8 +109,10 @@ async function onFaviconUpload(event: Event) {
   try {
     const res = await uploadMedia(file);
     form.value.faviconUrl = res.data.url;
+    toast.success("Favicon uploaded");
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to upload favicon";
+    toast.error("Upload failed", error.value);
   } finally {
     uploadingFavicon.value = false;
     (event.target as HTMLInputElement).value = "";
@@ -118,34 +127,24 @@ async function onSidebarLogoUpload(event: Event) {
   try {
     const res = await uploadMedia(file);
     form.value.sidebarLogoUrl = res.data.url;
+    toast.success("Sidebar logo uploaded");
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to upload sidebar logo";
+    toast.error("Upload failed", error.value);
   } finally {
     uploadingSidebarLogo.value = false;
     (event.target as HTMLInputElement).value = "";
   }
 }
 
-async function onPortalLogoUpload(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  uploadingPortalLogo.value = true;
-  error.value = "";
-  try {
-    const res = await uploadMedia(file);
-    form.value.portalLogoUrl = res.data.url;
-  } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : "Failed to upload portal logo";
-  } finally {
-    uploadingPortalLogo.value = false;
-    (event.target as HTMLInputElement).value = "";
-  }
-}
-
 async function load() {
   try {
-    const response = await getSettings();
-    form.value = response.data;
+    const [settingsResponse, pagesResponse] = await Promise.all([
+      getSettings(),
+      listPages("?status=published&page=1&limit=100&sortBy=updatedAt&sortDir=desc"),
+    ]);
+    form.value = settingsResponse.data;
+    publishedPages.value = pagesResponse.data;
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to load settings";
   }
@@ -159,14 +158,29 @@ async function save() {
     site.applyFrom(form.value);
     site.setDocumentTitle((route.meta.title as string) || "Settings");
     saved.value = true;
+    toast.success("Settings saved");
     setTimeout(() => {
       saved.value = false;
     }, 2000);
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to save settings";
+    toast.error("Save failed", error.value);
   } finally {
     saving.value = false;
   }
+}
+
+async function removeAsset(key: "siteIconUrl" | "faviconUrl" | "sidebarLogoUrl", label: string) {
+  if (!form.value[key]) return;
+  const allowed = await confirmDialog.confirm({
+    title: `Remove ${label}?`,
+    message: "This will clear the current image reference.",
+    confirmText: "Remove",
+    destructive: true,
+  });
+  if (!allowed) return;
+  form.value[key] = "";
+  toast.info(`${label} removed`);
 }
 
 onMounted(load);
@@ -209,6 +223,25 @@ onMounted(load);
                 <label class="text-sm font-medium text-slate-700">Footer Text</label>
                 <input v-model="form.footerText" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" placeholder="e.g. © 2026 My Company" />
                 <p class="text-xs text-slate-400">Displayed at the bottom of the sidebar.</p>
+              </div>
+              <div class="space-y-1.5 md:col-span-2">
+                <label class="text-sm font-medium text-slate-700">Front Page</label>
+                <select
+                  v-model="form.frontPageId"
+                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                >
+                  <option :value="null">None (use fallback)</option>
+                  <option v-for="page in publishedPages" :key="page.id" :value="page.id">
+                    {{ page.title }} ({{ page.slug }})
+                  </option>
+                </select>
+                <p class="text-xs text-slate-400">Select which published page is shown at Webfront homepage (`/`).</p>
+                <p
+                  v-if="form.frontPageId !== null && !publishedPages.some((page) => page.id === form.frontPageId)"
+                  class="text-xs text-amber-600"
+                >
+                  Selected front page is no longer published or missing. Webfront will use fallback order.
+                </p>
               </div>
             </div>
           </div>
@@ -263,7 +296,7 @@ onMounted(load);
                         Library
                       </button>
                     </div>
-                    <button v-if="form.siteIconUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="form.siteIconUrl = ''">
+                    <button v-if="form.siteIconUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="removeAsset('siteIconUrl', 'Site icon')">
                       <Trash2 class="h-3 w-3" />
                       Remove
                     </button>
@@ -292,7 +325,7 @@ onMounted(load);
                         Library
                       </button>
                     </div>
-                    <button v-if="form.faviconUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="form.faviconUrl = ''">
+                    <button v-if="form.faviconUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="removeAsset('faviconUrl', 'Favicon')">
                       <Trash2 class="h-3 w-3" />
                       Remove
                     </button>
@@ -321,40 +354,11 @@ onMounted(load);
                         Library
                       </button>
                     </div>
-                    <button v-if="form.sidebarLogoUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="form.sidebarLogoUrl = ''">
+                    <button v-if="form.sidebarLogoUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="removeAsset('sidebarLogoUrl', 'Sidebar logo')">
                       <Trash2 class="h-3 w-3" />
                       Remove
                     </button>
                     <p class="text-xs text-slate-400">Shown at top of sidebar when provided.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Portal Logo -->
-              <div class="space-y-3">
-                <label class="text-sm font-medium text-slate-700">Portal Logo</label>
-                <div class="flex items-start gap-4">
-                  <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-50">
-                    <img v-if="form.portalLogoUrl" :src="resolveUrl(form.portalLogoUrl)" alt="Portal logo" class="h-full w-full object-contain" />
-                    <Image v-else class="h-8 w-8 text-slate-300" />
-                  </div>
-                  <div class="flex-1 space-y-2">
-                    <div class="flex gap-2">
-                      <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50">
-                        <Upload class="h-4 w-4" />
-                        {{ uploadingPortalLogo ? 'Uploading...' : 'Upload' }}
-                        <input type="file" accept="image/*" class="hidden" @change="onPortalLogoUpload" :disabled="uploadingPortalLogo" />
-                      </label>
-                      <button class="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50" @click="openMediaPicker('portalLogoUrl')">
-                        <FolderOpen class="h-4 w-4" />
-                        Library
-                      </button>
-                    </div>
-                    <button v-if="form.portalLogoUrl" class="flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-rose-500" @click="form.portalLogoUrl = ''">
-                      <Trash2 class="h-3 w-3" />
-                      Remove
-                    </button>
-                    <p class="text-xs text-slate-400">Displayed on storefront header, portal navigation, and POS screen.</p>
                   </div>
                 </div>
               </div>
@@ -402,21 +406,14 @@ onMounted(load);
         leave-from-class="opacity-100"
         leave-to-class="opacity-0"
       >
-        <div v-if="mediaPickerOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="mediaPickerOpen = false; dragMediaPicker.resetPosition()">
-          <div
-            :ref="dragMediaPicker.modalRef"
-            :style="unref(dragMediaPicker.modalStyle)"
-            class="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl"
-          >
-            <div
-              class="flex cursor-move items-center justify-between border-b border-slate-100 px-5 py-3"
-              @mousedown="dragMediaPicker.onHandleMouseDown"
-            >
+        <div v-if="mediaPickerOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="mediaPickerOpen = false">
+          <div class="mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3">
               <div class="flex items-center gap-2">
                 <FolderOpen class="h-4 w-4 text-amber-600" />
                 <h3 class="text-sm font-semibold text-slate-900">Select from Library</h3>
               </div>
-              <button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" @click="mediaPickerOpen = false; dragMediaPicker.resetPosition()">
+              <button class="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" @click="mediaPickerOpen = false">
                 <X class="h-4 w-4" />
               </button>
             </div>

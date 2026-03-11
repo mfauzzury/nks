@@ -12,6 +12,8 @@ import {
 import { API_BASE_URL } from "@/env";
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { listMedia, removeMedia, updateMediaMetadata, uploadMedia } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import type { Media, MediaMetadataInput } from "@/types";
 
 const rows = ref<Media[]>([]);
@@ -22,6 +24,8 @@ const selectedIds = ref<number[]>([]);
 const isDragOver = ref(false);
 const activeMediaId = ref<number | null>(null);
 const savingMetadata = ref(false);
+const confirmDialog = useConfirmDialog();
+const toast = useToast();
 const metadataForm = ref<MediaMetadataInput>({
   title: "",
   altText: "",
@@ -51,8 +55,10 @@ async function uploadFiles(files: File[]) {
       await uploadMedia(file);
     }
     await load();
+    toast.success("Upload complete", `${files.length} file(s) uploaded.`);
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Upload failed";
+    toast.error("Upload failed", error.value);
   } finally {
     uploading.value = false;
   }
@@ -83,13 +89,22 @@ async function onDrop(event: DragEvent) {
 }
 
 async function remove(id: number) {
+  const allowed = await confirmDialog.confirm({
+    title: "Delete media file?",
+    message: "This action cannot be undone.",
+    confirmText: "Delete",
+    destructive: true,
+  });
+  if (!allowed) return;
   error.value = "";
   try {
     await removeMedia(id);
     selectedIds.value = selectedIds.value.filter((value) => value !== id);
     await load();
+    toast.success("Media deleted");
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Delete failed";
+    toast.error("Delete failed", error.value);
   }
 }
 
@@ -113,6 +128,13 @@ function toggleSelectAll() {
 
 async function removeSelected() {
   if (selectedIds.value.length === 0) return;
+  const allowed = await confirmDialog.confirm({
+    title: "Delete selected files?",
+    message: `Delete ${selectedIds.value.length} selected file(s). This action cannot be undone.`,
+    confirmText: "Delete all",
+    destructive: true,
+  });
+  if (!allowed) return;
 
   error.value = "";
   deleting.value = true;
@@ -123,10 +145,14 @@ async function removeSelected() {
 
     if (failed > 0) {
       error.value = `${failed} file(s) failed to delete.`;
+      toast.error("Partial delete", error.value);
+    } else {
+      toast.success("Selected media deleted");
     }
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Bulk delete failed";
+    toast.error("Delete failed", error.value);
   } finally {
     deleting.value = false;
   }
@@ -159,8 +185,10 @@ async function saveMetadata() {
     const response = await updateMediaMetadata(media.id, metadataForm.value);
     const updated = response.data;
     rows.value = rows.value.map((item) => (item.id === updated.id ? updated : item));
+    toast.success("Metadata saved");
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to save metadata";
+    toast.error("Save failed", error.value);
   } finally {
     savingMetadata.value = false;
   }

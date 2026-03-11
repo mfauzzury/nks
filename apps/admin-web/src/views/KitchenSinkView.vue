@@ -4,6 +4,7 @@ import {
   Check,
   Eye,
   Info,
+  Bell,
   Pencil,
   Trash2,
   Layers,
@@ -25,6 +26,7 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import { useToast } from "@/composables/useToast";
 
 const selectValue = ref("active");
 const dropdownStatus = ref("published");
@@ -33,6 +35,7 @@ const page = ref(2);
 const dropdownOpen = ref(false);
 const dialogOpen = ref(false);
 const activeTab = ref("content");
+const toast = useToast();
 
 const totalItems = 48;
 const itemsPerPage = 10;
@@ -46,6 +49,7 @@ const sectionLinks = [
   { id: "inputs", label: "Inputs", icon: TextCursorInput, color: "text-amber-600" },
   { id: "select", label: "Select", icon: ListFilter, color: "text-cyan-600" },
   { id: "tabs", label: "Tabs", icon: PanelTop, color: "text-pink-600" },
+  { id: "toast", label: "Toast", icon: Bell, color: "text-blue-600" },
   { id: "dialog", label: "Dialog", icon: MessageSquare, color: "text-indigo-600" },
   { id: "dropdown", label: "Dropdown", icon: ChevronDown, color: "text-teal-600" },
   { id: "tooltip", label: "Tooltip", icon: HelpCircle, color: "text-orange-600" },
@@ -58,6 +62,18 @@ const sectionLinks = [
 function nextPage(delta: number) {
   const next = Math.max(1, Math.min(totalPages.value, page.value + delta));
   page.value = next;
+}
+
+function demoToast(variant: "success" | "error" | "info") {
+  if (variant === "success") {
+    toast.success("Changes saved", "Your content has been updated.");
+    return;
+  }
+  if (variant === "error") {
+    toast.error("Save failed", "Please retry in a few seconds.");
+    return;
+  }
+  toast.info("Sync in progress", "Background update is running.");
 }
 </script>
 
@@ -475,6 +491,30 @@ function nextPage(delta: number) {
                   <p class="mb-1 font-semibold">Don&apos;t</p>
                   <p>Do not put unrelated workflows in tabs; split into separate pages instead.</p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- ═══════ TOAST ═══════ -->
+        <article id="toast" class="scroll-mt-24 rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+            <Bell class="h-4 w-4 text-blue-600" />
+            <h2 class="text-sm font-semibold text-slate-900">Toast</h2>
+          </div>
+          <div class="space-y-4 p-4">
+            <div>
+              <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Preview</p>
+              <div class="flex flex-wrap gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/50 p-5">
+                <button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700" @click="demoToast('success')">Success Toast</button>
+                <button class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700" @click="demoToast('info')">Info Toast</button>
+                <button class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-rose-700" @click="demoToast('error')">Error Toast</button>
+              </div>
+            </div>
+            <div>
+              <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Notes</p>
+              <div class="rounded-lg border border-slate-200 p-5 text-sm text-slate-600">
+                Toast appears in the admin topbar area (current app style), with auto-dismiss progress.
               </div>
             </div>
           </div>

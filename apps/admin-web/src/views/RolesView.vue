@@ -11,12 +11,16 @@ import {
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { listRoles, createRole, updateRole, deleteRole } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import type { Role, RoleInput } from "@/types";
 
 const roles = ref<Role[]>([]);
 const showForm = ref(false);
 const editingId = ref<number | null>(null);
 const saving = ref(false);
+const confirmDialog = useConfirmDialog();
+const toast = useToast();
 
 const availablePermissions = [
   "posts.view", "posts.create", "posts.edit", "posts.delete",
@@ -80,8 +84,9 @@ const groupedPermissions = availablePermissions.reduce<Record<string, string[]>>
 
 async function save() {
   saving.value = true;
+  const wasEdit = editingId.value !== null;
   try {
-    if (editingId.value !== null) {
+    if (wasEdit && editingId.value !== null) {
       await updateRole(editingId.value, form.value);
     } else {
       await createRole(form.value);
@@ -89,14 +94,29 @@ async function save() {
     await load();
     showForm.value = false;
     editingId.value = null;
+    toast.success(wasEdit ? "Role updated" : "Role created");
+  } catch (e) {
+    toast.error("Save failed", e instanceof Error ? e.message : "Unable to save role.");
   } finally {
     saving.value = false;
   }
 }
 
 async function remove(id: number) {
-  await deleteRole(id);
-  await load();
+  const allowed = await confirmDialog.confirm({
+    title: "Delete role?",
+    message: "This action cannot be undone.",
+    confirmText: "Delete",
+    destructive: true,
+  });
+  if (!allowed) return;
+  try {
+    await deleteRole(id);
+    await load();
+    toast.success("Role deleted");
+  } catch (e) {
+    toast.error("Delete failed", e instanceof Error ? e.message : "Unable to delete role.");
+  }
 }
 
 onMounted(load);

@@ -1,37 +1,25 @@
 import type { Component } from "vue";
 import {
-  AlertTriangle,
-  BarChart3,
   Braces,
-  CalendarClock,
-  FileUp,
-  Layers,
-  Plug,
-  RefreshCw,
-  Users,
   Database,
   FileText,
   Gauge,
   Image,
   LayoutGrid,
+  Link2,
   Menu,
   Settings,
-  Wallet,
 } from "lucide-vue-next";
 
-export type MenuChild = {
-  label: string;
-  to: string;
-};
-
-export type MenuItemDef = {
+export type MenuNode = {
   id: string;
   label: string;
   to: string;
+  children?: MenuNode[];
+};
+
+export type MenuItemDef = MenuNode & {
   icon: Component;
-  children?: MenuChild[];
-  /** Required permission to see this item. Omit = visible to all authenticated users. */
-  permission?: string;
 };
 
 export type MenuGroupDef = {
@@ -43,7 +31,11 @@ export type MenuGroupDef = {
 export type AdminMenuPrefs = {
   groupOrder: string[];
   itemOrder: Record<string, string[]>;
+  childOrder: Record<string, string[]>;
+  grandchildOrder: Record<string, string[]>;
   hidden: string[];
+  hiddenChildren: string[];
+  hiddenGrandchildren: string[];
   hiddenGroups: string[];
 };
 
@@ -52,236 +44,69 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     id: "dashboard",
     label: "",
     items: [
-      { id: "main-dashboard", label: "Dashboard", to: "/", icon: Gauge },
-    ],
-  },
-  {
-    id: "profil-pembayar",
-    label: "Profil Pembayar",
-    items: [
-      {
-        id: "pembayar-individu",
-        label: "Individu",
-        to: "/payers/individual/list",
-        icon: Users,
-        permission: "users.view",
-        children: [
-          { label: "Senarai", to: "/payers/individual/list" },
-          { label: "Daftar Baru", to: "/payers/individual/new" },
-        ],
-      },
-      {
-        id: "pembayar-korporat",
-        label: "Korporat/Syarikat",
-        to: "/payers/corporate/list",
-        icon: Users,
-        permission: "users.view",
-        children: [
-          { label: "Senarai", to: "/payers/corporate/list" },
-          { label: "Daftar Baru", to: "/payers/corporate/new" },
-        ],
-      },
-      {
-        id: "account-merge",
-        label: "Account Merge",
-        to: "/reconciliation/account-merge",
-        icon: Users,
-        children: [
-          { label: "Queue", to: "/reconciliation/account-merge/queue" },
-          { label: "Detection & Merge", to: "/reconciliation/account-merge" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "spg",
-    label: "Skim Potongan Gaji (SPG)",
-    items: [
-      {
-        id: "spg-majikan",
-        label: "Majikan SPG",
-        to: "/payers/spg/list",
-        icon: Users,
-        permission: "users.view",
-        children: [
-          { label: "Senarai", to: "/payers/spg/list" },
-          { label: "Daftar Baru", to: "/payers/spg/new" },
-        ],
-      },
-      {
-        id: "spg-semakan-bayaran",
-        label: "Semakan Bayaran",
-        to: "/spg/payments/pending",
-        icon: Wallet,
-      },
+      { id: "main-dashboard", label: "Dashboard", to: "/admin", icon: Gauge },
     ],
   },
   {
     id: "portal",
-    label: "Portal",
+    label: "Webfront",
     items: [
-      { id: "dashboard", label: "Portal Dashboard", to: "/portal/dashboard", icon: Gauge, permission: "posts.view" },
-      {
-        id: "duplicates",
-        label: "Duplicate Cases",
-        to: "/duplicates",
-        icon: Users,
-        permission: "posts.view",
-        children: [{ label: "Case List", to: "/duplicates" }],
-      },
+      { id: "dashboard", label: "Dashboard", to: "/admin/portal/dashboard", icon: Gauge },
       {
         id: "posts",
         label: "Posts",
-        to: "/posts",
+        to: "/admin/posts",
         icon: FileText,
-        permission: "posts.view",
         children: [
-          { label: "All Posts", to: "/posts" },
-          { label: "Add New", to: "/posts/new" },
-          { label: "Categories", to: "/categories" },
+          { id: "posts-all", label: "All Posts", to: "/admin/posts" },
+          { id: "posts-new", label: "Add New", to: "/admin/posts/new" },
+          { id: "posts-categories", label: "Categories", to: "/admin/categories" },
         ],
       },
       {
         id: "pages",
         label: "Pages",
-        to: "/pages",
+        to: "/admin/pages",
         icon: FileText,
-        permission: "pages.view",
         children: [
-          { label: "All Pages", to: "/pages" },
-          { label: "Add New", to: "/pages/new" },
+          { id: "pages-all", label: "All Pages", to: "/admin/pages" },
+          { id: "pages-new", label: "Add New", to: "/admin/pages/new" },
         ],
       },
       {
         id: "media",
         label: "Media",
-        to: "/media",
+        to: "/admin/media",
         icon: Image,
-        permission: "media.view",
-        children: [{ label: "Library", to: "/media" }],
+        children: [{ id: "media-library", label: "Library", to: "/admin/media" }],
       },
+      { id: "storefront-menu", label: "Menus", to: "/admin/webfront-menu", icon: Link2 },
+      { id: "webfront-settings", label: "Settings", to: "/admin/webfront-settings", icon: Settings },
     ],
   },
   {
     id: "administration",
     label: "Administration",
     items: [
-      { id: "menus", label: "Menus", to: "/menus", icon: Menu, permission: "menus.view" },
+      { id: "menus", label: "Menus", to: "/admin/menus", icon: Menu },
       {
         id: "settings",
         label: "Settings",
-        to: "/settings",
+        to: "/admin/settings",
         icon: Settings,
-        permission: "settings.view",
         children: [
-          { label: "General", to: "/settings" },
-          { label: "Webfront", to: "/settings/webfront" },
-          { label: "Users", to: "/settings/users" },
-          { label: "Roles", to: "/settings/roles" },
-          { label: "System", to: "/settings/system" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "integration-3rd-party",
-    label: "Integration 3rd Party",
-    items: [
-      {
-        id: "integration-overview",
-        label: "Overview",
-        to: "/integration/3rd-party",
-        icon: Plug,
-        permission: "integration.view",
-      },
-      {
-        id: "integration-file-upload",
-        label: "File Upload",
-        to: "/integration/3rd-party/file-upload",
-        icon: FileUp,
-        permission: "integration.upload",
-      },
-      {
-        id: "integration-batch-processing",
-        label: "Batch Processing",
-        to: "/integration/3rd-party/batch-processing",
-        icon: Layers,
-        permission: "integration.process",
-      },
-      {
-        id: "integration-reconciliation",
-        label: "Reconciliation",
-        to: "/integration/3rd-party/reconciliation",
-        icon: RefreshCw,
-        permission: "integration.reconcile",
-      },
-      {
-        id: "integration-exceptions",
-        label: "Exceptions",
-        to: "/integration/3rd-party/exceptions",
-        icon: AlertTriangle,
-        permission: "integration.exceptions",
-      },
-      {
-        id: "integration-reports",
-        label: "Reports",
-        to: "/integration/3rd-party/reports",
-        icon: BarChart3,
-        permission: "integration.reports",
-      },
-    ],
-  },
-  {
-    id: "kutipan-kaunter",
-    label: "Kutipan Kaunter",
-    items: [
-      { id: "counter-payments", label: "Senarai Kutipan", to: "/counter/payments", icon: Wallet },
-      { id: "counter-deposits", label: "Konsolidasi Bank-In", to: "/counter/deposits", icon: Wallet },
-      { id: "counter-reconciliation", label: "Rekonsiliasi Bank", to: "/counter/reconciliation", icon: Wallet },
-      { id: "scheduled-payments", label: "Penjadualan Bayaran", to: "/scheduled-payments", icon: CalendarClock },
-    ],
-  },
-  {
-    id: "zakat-configuration",
-    label: "Konfigurasi Zakat",
-    items: [
-      {
-        id: "zakat-types",
-        label: "Jenis Zakat",
-        to: "/zakat-config/types",
-        icon: FileText,
-        permission: "settings.view",
-      },
-      {
-        id: "zakat-payment-gateways",
-        label: "Gerbang Pembayaran",
-        to: "/zakat-config/payment-gateways",
-        icon: Settings,
-        permission: "settings.view",
-      },
-      {
-        id: "zakat-source-categories",
-        label: "Kategori Sumber",
-        to: "/zakat-config/source-categories",
-        icon: Layers,
-        permission: "settings.view",
-      },
-      {
-        id: "zakat-source-data",
-        label: "Sumber Data",
-        to: "/zakat-config/source-data",
-        icon: Database,
-        permission: "settings.view",
-      },
-      {
-        id: "amil",
-        label: "Amil",
-        to: "/integration/3rd-party/amil",
-        icon: Users,
-        permission: "settings.view",
-        children: [
-          { label: "Senarai", to: "/integration/3rd-party/amil" },
-          { label: "Daftar Baru", to: "/integration/3rd-party/amil/new" },
+          { id: "settings-general", label: "General", to: "/admin/settings" },
+          {
+            id: "settings-users",
+            label: "Users",
+            to: "/admin/settings/users",
+            children: [
+              { id: "settings-users-all", label: "All Users", to: "/admin/settings/users" },
+              { id: "settings-users-new", label: "Add User", to: "/admin/settings/users/new" },
+            ],
+          },
+          { id: "settings-roles", label: "Roles", to: "/admin/settings/roles" },
+          { id: "settings-system", label: "System", to: "/admin/settings/system" },
         ],
       },
     ],
@@ -290,18 +115,17 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
     id: "development",
     label: "Development",
     items: [
-      { id: "database-schema", label: "Database Schema", to: "/development/database-schema", icon: Database, permission: "roles.view" },
-      { id: "api-management", label: "API Management", to: "/development/api-management", icon: Braces, permission: "roles.view" },
+      { id: "database-schema", label: "Database Schema", to: "/admin/development/database-schema", icon: Database },
+      { id: "api-management", label: "API Management", to: "/admin/development/api-management", icon: Braces },
       {
         id: "kitchen-sink",
         label: "Kitchen Sink",
-        to: "/kitchen-sink",
+        to: "/admin/kitchen-sink",
         icon: LayoutGrid,
-        permission: "roles.view",
         children: [
-          { label: "Components", to: "/kitchen-sink" },
-          { label: "Forms", to: "/kitchen-sink/forms" },
-          { label: "Charts", to: "/kitchen-sink/charts" },
+          { id: "kitchen-components", label: "Components", to: "/admin/kitchen-sink" },
+          { id: "kitchen-forms", label: "Forms", to: "/admin/kitchen-sink/forms" },
+          { id: "kitchen-charts", label: "Charts", to: "/admin/kitchen-sink/charts" },
         ],
       },
     ],

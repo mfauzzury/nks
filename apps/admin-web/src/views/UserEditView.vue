@@ -15,12 +15,16 @@ import {
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { useAuthStore } from "@/stores/auth";
 import { getUser, createUser, updateUser, listRoles } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import { API_BASE_URL } from "@/env";
 import type { Role } from "@/types";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const toast = useToast();
+const confirmDialog = useConfirmDialog();
 
 const isNew = computed(() => route.params.id === "new");
 const userId = computed(() => (isNew.value ? null : Number(route.params.id)));
@@ -112,7 +116,8 @@ async function saveProfile() {
         role: profileForm.value.role,
         isActive: profileForm.value.isActive,
       });
-      router.push("/settings/users");
+      toast.success("User created");
+      router.push("/admin/settings/users");
       return;
     }
 
@@ -127,9 +132,11 @@ async function saveProfile() {
       });
     }
     profileSaved.value = true;
+    toast.success("Profile updated");
     setTimeout(() => { profileSaved.value = false; }, 2000);
   } catch (e: unknown) {
     profileError.value = e instanceof Error ? e.message : "Failed to save";
+    toast.error("Save failed", profileError.value);
   } finally {
     savingProfile.value = false;
   }
@@ -172,10 +179,12 @@ async function savePassword() {
       });
     }
     passwordChanged.value = true;
+    toast.success(isSelf.value ? "Password changed" : "Password updated");
     passwordForm.value = { currentPassword: "", newPassword: "", confirmPassword: "" };
     setTimeout(() => { passwordChanged.value = false; }, 2000);
   } catch (e: unknown) {
     passwordError.value = e instanceof Error ? e.message : "Failed to change password";
+    toast.error("Password update failed", passwordError.value);
   } finally {
     savingPassword.value = false;
   }
@@ -189,8 +198,10 @@ async function onAvatarUpload(event: Event) {
   try {
     await auth.uploadAvatar(file);
     userPhotoUrl.value = auth.user?.photoUrl || null;
+    toast.success("Profile photo updated");
   } catch (e: unknown) {
     avatarError.value = e instanceof Error ? e.message : "Failed to upload photo";
+    toast.error("Upload failed", avatarError.value);
   } finally {
     uploadingAvatar.value = false;
     (event.target as HTMLInputElement).value = "";
@@ -198,12 +209,21 @@ async function onAvatarUpload(event: Event) {
 }
 
 async function onRemoveAvatar() {
+  const allowed = await confirmDialog.confirm({
+    title: "Remove profile photo?",
+    message: "Your avatar will be removed from the account.",
+    confirmText: "Remove",
+    destructive: true,
+  });
+  if (!allowed) return;
   avatarError.value = "";
   try {
     await auth.removeAvatar();
     userPhotoUrl.value = null;
+    toast.info("Profile photo removed");
   } catch (e: unknown) {
     avatarError.value = e instanceof Error ? e.message : "Failed to remove photo";
+    toast.error("Remove failed", avatarError.value);
   }
 }
 
@@ -218,7 +238,7 @@ onMounted(load);
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <router-link
-            to="/settings/users"
+            to="/admin/settings/users"
             class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             v-if="!isSelf"
           >

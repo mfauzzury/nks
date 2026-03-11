@@ -11,12 +11,17 @@ import {
 } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import MarkdownEditor from "@/components/MarkdownEditor.vue";
 import { createPage, getPage, listMedia, updatePage, uploadMedia } from "@/api/cms";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useToast } from "@/composables/useToast";
 import { API_BASE_URL } from "@/env";
 import type { Media, PublishStatus } from "@/types";
 
 const route = useRoute();
 const router = useRouter();
+const toast = useToast();
+const confirmDialog = useConfirmDialog();
 
 const id = computed(() => Number(route.params.id || 0));
 const isEdit = computed(() => id.value > 0);
@@ -71,6 +76,9 @@ async function handleUpload(event: Event) {
     const response = await uploadMedia(file);
     mediaItems.value.unshift(response.data);
     featuredImageId.value = response.data.id;
+    toast.success("Image uploaded");
+  } catch (e) {
+    toast.error("Upload failed", e instanceof Error ? e.message : "Unable to upload image.");
   } finally {
     uploading.value = false;
     input.value = "";
@@ -86,13 +94,31 @@ async function save() {
     featuredImageId: featuredImageId.value,
   };
 
-  if (isEdit.value) {
-    await updatePage(id.value, payload);
-  } else {
-    await createPage(payload);
+  try {
+    if (isEdit.value) {
+      await updatePage(id.value, payload);
+      toast.success("Page updated");
+    } else {
+      await createPage(payload);
+      toast.success("Page created");
+    }
+    router.push("/admin/pages");
+  } catch (e) {
+    toast.error("Save failed", e instanceof Error ? e.message : "Unable to save page.");
   }
+}
 
-  router.push("/pages");
+async function removeFeaturedImage() {
+  if (!featuredImageId.value) return;
+  const allowed = await confirmDialog.confirm({
+    title: "Remove featured image?",
+    message: "This only removes the image from this page.",
+    confirmText: "Remove",
+    destructive: true,
+  });
+  if (!allowed) return;
+  featuredImageId.value = null;
+  toast.info("Featured image removed");
 }
 
 onMounted(load);
@@ -125,7 +151,7 @@ onMounted(load);
               </div>
               <div class="space-y-1.5">
                 <label class="text-sm font-medium text-slate-700">Content</label>
-                <textarea v-model="content" rows="16" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200" placeholder="Write your page content here..." />
+                <MarkdownEditor v-model="content" :rows="16" placeholder="Write your page using Markdown..." />
               </div>
             </div>
           </article>
@@ -157,7 +183,7 @@ onMounted(load);
                 </button>
                 <button
                   class="flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-                  @click="router.push('/pages')"
+                  @click="router.push('/admin/pages')"
                 >
                   <X class="h-4 w-4" />
                 </button>
@@ -192,7 +218,7 @@ onMounted(load);
                   <button
                     type="button"
                     class="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50"
-                    @click="featuredImageId = null"
+                    @click="removeFeaturedImage"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
                     Remove
