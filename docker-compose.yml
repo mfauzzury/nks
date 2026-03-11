@@ -43,12 +43,13 @@ services:
       DATABASE_URL: "${DATABASE_URL}"
     volumes:
       - api_uploads:/app/apps/api-server/uploads
+    # API hanya listen selepas MySQL OK + db push + seed (boleh >60s). Jangan gagalkan deploy.
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
 
   admin-web:
     build:
@@ -61,9 +62,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    # Mulakan selepas api-server dicipta (jangan tunggu healthy — API mungkin perlahan sambung MySQL)
     depends_on:
-      api-server:
-        condition: service_healthy
+      - api-server
 
 volumes:
   api_uploads:
