@@ -39,7 +39,8 @@ services:
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
       # PGP untuk fail JAN
       JAN_PGP_PASSWORD: "${JAN_PGP_PASSWORD:-}"
-      # DB — wajib; set dalam .env atau Coolify (contoh: mysql://user:pass@host:3306/nks)
+      # DB — wajib. Host dalam URL mesti boleh dicapai DARI DALAM container (jangan guna
+      # localhost jika MySQL di host; guna IP host atau nama perkhidmatan Docker).
       DATABASE_URL: "${DATABASE_URL}"
     volumes:
       - api_uploads:/app/apps/api-server/uploads
