@@ -5,8 +5,8 @@
 #   - admin-web  → Panel admin (SPA). Domain: https://nks.sena.my
 #   - api-server → REST API. Domain: https://nks-api.sena.my
 #
-# Coolify: Pasang domain nks.sena.my pada admin-web (port 80) dan
-#          nks-api.sena.my pada api-server (port 4000).
+# Coolify: Pasang domain nks.sena.my pada admin-web dan nks-api.sena.my pada api-server.
+# Port 80 mungkin sudah digunakan di host — admin-web guna 18080:80 (host:container).
 # =============================================================================
 
 services:
@@ -61,7 +61,7 @@ services:
     container_name: nks-admin-web
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "18080:80"
     # Mulakan selepas api-server dicipta (jangan tunggu healthy — API mungkin perlahan sambung MySQL)
     depends_on:
       - api-server
