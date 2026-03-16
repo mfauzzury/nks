@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, unref } from "vue";
 import { useRouter } from "vue-router";
-import { Banknote, Hash, Monitor, PlusCircle, Search, TrendingUp, Users } from "lucide-vue-next";
+import { Banknote, ExternalLink, Hash, Monitor, PlusCircle, Search, TrendingUp, Users } from "lucide-vue-next";
 
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { useDraggableModal } from "@/composables/useDraggableModal";
@@ -30,6 +30,13 @@ function fmtCurrency(value: number) {
 
 function fmtDate(value: string) {
   return new Date(value).toLocaleString("ms-MY");
+}
+
+function formatZakatSummary(row: CounterPaymentRow) {
+  if (row.zakatItems && row.zakatItems.length > 0) {
+    return row.zakatItems.map((z) => `${z.zakatType} (${z.financialYear})`).join(", ");
+  }
+  return row.paymentMethod.split("|").map((p) => p.trim())[1] || "-";
 }
 
 const totalAmount = computed(() => rows.value.reduce((sum, r) => sum + Number(r.amount || 0), 0));
@@ -66,7 +73,13 @@ function goToDepositWithSelected() {
 }
 
 function openPos() {
-  window.open("/counter/pos", "_blank");
+  const href = router.resolve({ name: "counter-pos" }).href;
+  window.open(href, "_blank");
+}
+
+function openDesk() {
+  const href = router.resolve({ name: "counter-desk" }).href;
+  window.open(href, "_blank");
 }
 
 async function openReceipt(id: number) {
@@ -91,6 +104,9 @@ function escapePdfText(value: string) {
 function downloadReceiptPdf() {
   if (!selectedReceipt.value) return;
   const tx = selectedReceipt.value;
+  const zakatLines = (tx.zakatItems && tx.zakatItems.length > 0)
+    ? tx.zakatItems.map((item) => `- ${item.zakatType} (${item.financialYear}): RM ${Number(item.amount).toFixed(2)}`)
+    : [`- ${tx.paymentMethod.split("|").map((p) => p.trim())[1] || "-"}`];
   const lines = [
     "RESIT BAYARAN KAUNTER - NKS",
     "",
@@ -101,6 +117,9 @@ function downloadReceiptPdf() {
     `Kaedah Bayaran: ${tx.counterChannel || "-"}`,
     `Tarikh: ${fmtDate(tx.paidAt)}`,
     `Status Rekonsiliasi: ${tx.reconStatus}`,
+    "",
+    "Item Zakat:",
+    ...zakatLines,
   ];
   const content = lines.map((line, i) => `BT /F1 12 Tf 50 ${800 - i * 24} Td (${escapePdfText(line)}) Tj ET`).join("\n");
   const objects = [
@@ -185,11 +204,20 @@ onMounted(load);
             <PlusCircle class="h-4 w-4" /> Tambah ke Batch
           </button>
           <button
-            class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+            class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+            @click="openDesk"
+          >
+            <Monitor class="h-4 w-4" />
+            Counter Desk
+            <ExternalLink class="h-3.5 w-3.5" />
+          </button>
+          <button
+            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             @click="openPos"
           >
             <Monitor class="h-4 w-4" />
             Mod POS
+            <ExternalLink class="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -282,7 +310,7 @@ onMounted(load);
                   <p class="font-medium text-slate-800">{{ row.guestName }}</p>
                   <p class="text-xs text-slate-500">{{ row.identityNo }}</p>
                 </td>
-                <td class="px-3 py-2 text-slate-600">{{ row.paymentMethod.split('|').map((p) => p.trim())[1] || '-' }}</td>
+                <td class="px-3 py-2 text-slate-600">{{ formatZakatSummary(row) }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ row.counterChannel }}</td>
                 <td class="px-3 py-2 text-right font-semibold text-slate-900">{{ fmtCurrency(row.amount) }}</td>
                 <td class="px-3 py-2">
@@ -328,6 +356,20 @@ onMounted(load);
               <p><span class="font-medium">Kaedah:</span> {{ selectedReceipt.counterChannel }}</p>
               <p><span class="font-medium">Tarikh:</span> {{ fmtDate(selectedReceipt.paidAt) }}</p>
               <p class="md:col-span-2 text-base font-semibold">Jumlah: {{ fmtCurrency(selectedReceipt.amount) }}</p>
+            </div>
+            <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Perincian Zakat</p>
+              <div class="mt-2 space-y-1.5">
+                <div
+                  v-for="line in selectedReceipt.zakatItems || []"
+                  :key="line.id"
+                  class="flex items-center justify-between text-xs"
+                >
+                  <span class="text-slate-700">{{ line.zakatType }} ({{ line.financialYear }})</span>
+                  <span class="font-semibold text-slate-900">{{ fmtCurrency(line.amount) }}</span>
+                </div>
+                <p v-if="!selectedReceipt.zakatItems || selectedReceipt.zakatItems.length === 0" class="text-xs text-slate-500">Tiada item direkodkan.</p>
+              </div>
             </div>
             <div class="mt-4 flex justify-end gap-2">
               <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" @click="printReceipt">Cetak</button>

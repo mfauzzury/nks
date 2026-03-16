@@ -40,8 +40,10 @@ import type {
   UserDetail,
   UserInput,
   PaymentGatewayConfig,
+  PublicSiteSettings,
   ReconciliationCaseRow,
   ReconciliationCaseStatus,
+  StorefrontMenuItem,
   ZakatTypeConfig,
 } from "@/types";
 import type { AdminMenuPrefs } from "@/config/admin-menu";
@@ -179,6 +181,74 @@ export async function saveAdminMenuPrefs(prefs: AdminMenuPrefs) {
     method: "PUT",
     body: JSON.stringify(prefs),
   });
+}
+
+const STOREFRONT_MENU_STORAGE_KEY = "storefrontMenuItems";
+
+function readStorefrontMenuStorage(): StorefrontMenuItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STOREFRONT_MENU_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item: unknown): item is Record<string, unknown> =>
+        typeof item === "object" && item !== null &&
+        typeof (item as Record<string, unknown>).id === "string" &&
+        typeof (item as Record<string, unknown>).label === "string" &&
+        typeof (item as Record<string, unknown>).href === "string"
+      )
+      .map((item) => ({
+        id: item.id as string,
+        label: item.label as string,
+        href: item.href as string,
+        parentId: typeof item.parentId === "string" ? item.parentId : null,
+        openInNewTab: Boolean(item.openInNewTab),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function writeStorefrontMenuStorage(items: StorefrontMenuItem[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STOREFRONT_MENU_STORAGE_KEY, JSON.stringify(items));
+}
+
+export function getStorefrontMenu(): { data: StorefrontMenuItem[] } {
+  return { data: readStorefrontMenuStorage() };
+}
+
+export function saveStorefrontMenu(items: StorefrontMenuItem[]): { data: StorefrontMenuItem[] } {
+  writeStorefrontMenuStorage(items);
+  return { data: items };
+}
+
+export async function getPublicSiteSettings(): Promise<{ data: PublicSiteSettings }> {
+  const settingsRes = await getSettings();
+  const menuRes = getStorefrontMenu();
+  const s = settingsRes.data;
+  const payload: PublicSiteSettings = {
+    siteTitle: s.siteTitle || "",
+    tagline: s.tagline || "",
+    webfrontTitle: s.webfrontTitle || s.siteTitle || "",
+    webfrontTagline: s.webfrontTagline || s.tagline || "",
+    siteIconUrl: s.siteIconUrl || "",
+    webfrontLogoUrl: s.webfrontLogoUrl || s.siteIconUrl || "",
+    faviconUrl: s.faviconUrl || "",
+    footerText: s.footerText || "",
+    storefrontMenu: menuRes.data || [],
+  };
+  return { data: payload };
+}
+
+export async function getPublicFrontPage() {
+  return apiRequest<{ data: Page }>("/api/public/pages/frontpage");
+}
+
+export async function getPublicPageBySlug(slug: string) {
+  return apiRequest<{ data: Page }>(`/api/public/pages/${encodeURIComponent(slug)}`);
 }
 
 // Users
@@ -527,15 +597,25 @@ export async function createCounterPayment(input: {
   identityNo: string;
   email?: string;
   phone?: string;
-  zakatType: string;
-  financialYear: string;
-  amount: number;
+  zakatType?: string;
+  financialYear?: string;
+  amount?: number;
+  zakatItems?: Array<{ zakatType: string; financialYear: string; amount: number }>;
   paymentChannel: CounterPaymentChannel;
   collectionPoint: string;
   terminalRef?: { rrn: string; authCode: string; tid: string; mid: string };
   notes?: string;
 }) {
-  return apiRequest<{ data: { paymentId: number; receiptNo: string; paidAt: string; amount: number; status: string } }>("/api/counter/payments", {
+  return apiRequest<{ data: {
+    paymentId: number;
+    receiptNo: string;
+    paidAt: string;
+    amount: number;
+    status: string;
+    paymentChannel: CounterPaymentChannel;
+    collectionPoint: string;
+    zakatItems: Array<{ zakatType: string; financialYear: string; amount: number }>;
+  } }>("/api/counter/payments", {
     method: "POST",
     body: JSON.stringify(input),
   });

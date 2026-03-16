@@ -63,6 +63,13 @@ function fmtDate(value: string) {
   return new Date(value).toLocaleString("ms-MY");
 }
 
+function formatZakatSummary(payment: CounterPaymentRow) {
+  if (payment.zakatItems && payment.zakatItems.length > 0) {
+    return payment.zakatItems.map((item) => `${item.zakatType} (${item.financialYear})`).join(", ");
+  }
+  return payment.paymentMethod.split("|").map((s) => s.trim())[1] || "-";
+}
+
 function toggleSelection(id: number) {
   if (selectedPaymentIds.value.includes(id)) {
     selectedPaymentIds.value = selectedPaymentIds.value.filter((x) => x !== id);
@@ -220,6 +227,7 @@ function nextBatchPage() {
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Tarikh</th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Nama</th>
                 <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">IC</th>
+                <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Zakat</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Amaun</th>
               </tr>
             </thead>
@@ -230,10 +238,11 @@ function nextBatchPage() {
                 <td class="px-3 py-2 text-slate-600">{{ fmtDate(p.paidAt) }}</td>
                 <td class="px-3 py-2 text-slate-800">{{ p.guestName }}</td>
                 <td class="px-3 py-2 text-slate-600">{{ p.identityNo }}</td>
+                <td class="px-3 py-2 text-slate-600">{{ formatZakatSummary(p) }}</td>
                 <td class="px-3 py-2 text-right font-semibold text-slate-900">{{ fmtCurrency(p.amount) }}</td>
               </tr>
-              <tr v-if="loading"><td colspan="6" class="px-3 py-5 text-center text-slate-400">Memuatkan...</td></tr>
-              <tr v-if="!loading && availablePayments.length === 0"><td colspan="6" class="px-3 py-5 text-center text-slate-400">Tiada transaksi unbatched untuk channel ini.</td></tr>
+              <tr v-if="loading"><td colspan="7" class="px-3 py-5 text-center text-slate-400">Memuatkan...</td></tr>
+              <tr v-if="!loading && availablePayments.length === 0"><td colspan="7" class="px-3 py-5 text-center text-slate-400">Tiada transaksi unbatched untuk channel ini.</td></tr>
             </tbody>
           </table>
         </div>
@@ -356,6 +365,7 @@ function nextBatchPage() {
                     <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Resit</th>
                     <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Nama</th>
                     <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">IC</th>
+                    <th class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Zakat</th>
                     <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Amaun</th>
                   </tr>
                 </thead>
@@ -364,6 +374,7 @@ function nextBatchPage() {
                     <td class="px-3 py-2 font-medium text-slate-800">{{ p.receiptNo }}</td>
                     <td class="px-3 py-2 text-slate-800">{{ p.guestName }}</td>
                     <td class="px-3 py-2 text-slate-600">{{ p.identityNo }}</td>
+                    <td class="px-3 py-2 text-slate-600">{{ formatZakatSummary(p) }}</td>
                     <td class="px-3 py-2 text-right font-semibold text-slate-900">{{ fmtCurrency(p.amount) }}</td>
                   </tr>
                 </tbody>

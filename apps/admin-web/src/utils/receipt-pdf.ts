@@ -13,6 +13,7 @@ export interface ReceiptData {
   payerIc: string;
   zakatType: string;
   financialYear?: string;
+  zakatItems?: Array<{ zakatType: string; financialYear: string; amount: number }>;
   paymentChannel: string;
   collectionPoint: string;
 }
@@ -133,17 +134,34 @@ function buildReceiptStream(data: ReceiptData): string {
   textLeft("BUTIRAN BAYARAN", LM + 8, y, "F2", 9);
   y -= 25;
 
-  const paymentRows: [string, string][] = [
-    ["Jenis Zakat", data.zakatType],
-    ["Tahun Zakat", data.financialYear || "-"],
-    ["Kaedah Bayaran", data.paymentChannel],
-    ["Pusat Kutipan", data.collectionPoint],
-    ["Status", data.status === "success" ? "Berjaya" : data.status],
-  ];
+  const itemRows = Array.isArray(data.zakatItems) ? data.zakatItems : [];
+  const paymentRows: [string, string][] = [];
+  if (itemRows.length > 0) {
+    paymentRows.push(["Jenis Zakat", `Multi item (${itemRows.length})`]);
+  } else {
+    paymentRows.push(["Jenis Zakat", data.zakatType]);
+    paymentRows.push(["Tahun Zakat", data.financialYear || "-"]);
+  }
+  paymentRows.push(["Kaedah Bayaran", data.paymentChannel]);
+  paymentRows.push(["Pusat Kutipan", data.collectionPoint]);
+  paymentRows.push(["Status", data.status === "success" ? "Berjaya" : data.status]);
+
   for (const [label, value] of paymentRows) {
     textLeft(`${label}`, labelX, y, "F1", 10);
     textLeft(`:  ${value}`, valueX, y, "F1", 10);
     y -= 18;
+  }
+
+  if (itemRows.length > 0) {
+    y -= 2;
+    textLeft("Perincian Item", labelX, y, "F2", 9);
+    y -= 14;
+    for (const item of itemRows) {
+      const itemLabel = `- ${item.zakatType} (${item.financialYear})`;
+      textLeft(itemLabel, labelX + 8, y, "F1", 9);
+      textRight(`RM ${Number(item.amount).toFixed(2)}`, y, "F1", 9);
+      y -= 14;
+    }
   }
 
   y -= 10;

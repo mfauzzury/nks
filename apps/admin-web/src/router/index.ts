@@ -56,11 +56,8 @@ import CounterPaymentsListView from "@/views/CounterPaymentsListView.vue";
 import CounterDepositsView from "@/views/CounterDepositsView.vue";
 import CounterReconciliationView from "@/views/CounterReconciliationView.vue";
 import CounterPosView from "@/views/CounterPosView.vue";
+import CounterDeskView from "@/views/CounterDeskView.vue";
 import ScheduledPaymentsView from "@/views/ScheduledPaymentsView.vue";
-import StorefrontHomeView from "@/views/StorefrontHomeView.vue";
-import StorefrontMenuView from "@/views/StorefrontMenuView.vue";
-import StorefrontPageView from "@/views/StorefrontPageView.vue";
-import WebfrontSettingsView from "@/views/WebfrontSettingsView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 
@@ -95,6 +92,7 @@ const router = createRouter({
     { path: "/counter/deposits", name: "counter-deposits", component: CounterDepositsView, meta: { requiresAuth: true, title: "Konsolidasi Bank-In" } },
     { path: "/counter/reconciliation", name: "counter-reconciliation", component: CounterReconciliationView, meta: { requiresAuth: true, title: "Rekonsiliasi Bank" } },
     { path: "/counter/pos", name: "counter-pos", component: CounterPosView, meta: { requiresAuth: true, title: "POS Kaunter" } },
+    { path: "/counter/desk", name: "counter-desk", component: CounterDeskView, meta: { requiresAuth: true, title: "Counter Desk" } },
     { path: "/scheduled-payments", name: "scheduled-payments", component: ScheduledPaymentsView, meta: { requiresAuth: true, title: "Penjadualan Bayaran" } },
     { path: "/duplicates", name: "duplicates", component: DuplicateCasesView, meta: { requiresAuth: true, title: "Duplicate Cases" } },
     { path: "/duplicates/:id", name: "duplicate-detail", component: DuplicateCaseDetailView, meta: { requiresAuth: true, title: "Duplicate Case Detail" } },
@@ -136,10 +134,10 @@ const router = createRouter({
       component: { template: "" },
     },
     { path: "/settings", name: "settings", component: SettingsView, meta: { requiresAuth: true, title: "Settings" } },
-    { path: "/settings/webfront", name: "webfront-settings", component: WebfrontSettingsView, meta: { requiresAuth: true, title: "Webfront Settings" } },
-    { path: "/storefront", name: "storefront-home", component: StorefrontHomeView, meta: { title: "Storefront" } },
-    { path: "/storefront/menu", name: "storefront-menu", component: StorefrontMenuView, meta: { title: "Storefront Menu" } },
-    { path: "/storefront/page/:slug", name: "storefront-page", component: StorefrontPageView, meta: { title: "Storefront Page" } },
+    { path: "/settings/webfront", redirect: "/settings" },
+    { path: "/storefront", redirect: "/portal/dashboard" },
+    { path: "/storefront/menu", redirect: "/portal/dashboard" },
+    { path: "/storefront/page/:slug", redirect: "/portal/dashboard" },
     { path: "/settings/users", name: "settings-users", component: UsersView, meta: { requiresAuth: true, title: "Users" } },
     { path: "/settings/users/new", name: "user-create", component: UserEditView, meta: { requiresAuth: true, title: "New User" } },
     { path: "/settings/users/:id", name: "user-edit", component: UserEditView, meta: { requiresAuth: true, title: "Edit User" } },

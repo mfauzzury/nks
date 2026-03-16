@@ -142,15 +142,39 @@ export type MediaMetadataInput = {
 export type SettingsPayload = {
   siteTitle: string;
   tagline: string;
+  webfrontTitle?: string;
+  webfrontTagline?: string;
   titleFormat: string;
   metaDescription: string;
   siteIconUrl: string;
+  webfrontLogoUrl?: string;
   sidebarLogoUrl: string;
   portalLogoUrl: string;
   faviconUrl: string;
   language: string;
   timezone: string;
   footerText: string;
+  frontPageId?: number | null;
+};
+
+export type StorefrontMenuItem = {
+  id: string;
+  label: string;
+  href: string;
+  parentId: string | null;
+  openInNewTab: boolean;
+};
+
+export type PublicSiteSettings = {
+  siteTitle: string;
+  tagline: string;
+  webfrontTitle: string;
+  webfrontTagline: string;
+  siteIconUrl: string;
+  webfrontLogoUrl: string;
+  faviconUrl: string;
+  footerText: string;
+  storefrontMenu: StorefrontMenuItem[];
 };
 
 export type Role = {
@@ -507,6 +531,12 @@ export type CounterPaymentRow = {
   depositBatchId: number | null;
   reconStatus: CounterReconStatus;
   notes: string | null;
+  zakatItems?: Array<{
+    id: number;
+    zakatType: string;
+    financialYear: string;
+    amount: number;
+  }>;
   paidAt: string;
   createdAt: string;
   collectedByUser?: { id: number; name: string; role: string };
@@ -577,6 +607,7 @@ export type ReconciliationCaseRow = {
     depositType: CounterDepositType;
     status: CounterDepositStatus;
     systemAmount: number;
+    itemCount: number;
   } | null;
   statementLine?: {
     id: number;
