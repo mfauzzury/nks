@@ -62,6 +62,11 @@ dashboardRouter.get("/main", async (req, res) => {
         paidAt: true,
         source: true,
         identityNo: true,
+        zakatItems: {
+          select: {
+            zakatType: true,
+          },
+        },
       },
       orderBy: { paidAt: "desc" },
     }),
@@ -108,11 +113,18 @@ dashboardRouter.get("/main", async (req, res) => {
     const monthKey = p.paidAt.toISOString().slice(0, 7);
     monthMap.set(monthKey, (monthMap.get(monthKey) || 0) + amount);
 
-    const parts = p.paymentMethod.split("|").map((s: string) => s.trim());
-    const zakatType = parts.length > 1 ? parts[1] : "Lain-lain";
-    zakatMap.set(zakatType, (zakatMap.get(zakatType) || 0) + 1);
+    if (p.zakatItems.length > 0) {
+      for (const item of p.zakatItems) {
+        const label = item.zakatType || "Lain-lain";
+        zakatMap.set(label, (zakatMap.get(label) || 0) + 1);
+      }
+    } else {
+      const parts = p.paymentMethod.split("|").map((s: string) => s.trim());
+      const zakatType = parts.length > 1 ? parts[1] : "Lain-lain";
+      zakatMap.set(zakatType, (zakatMap.get(zakatType) || 0) + 1);
+    }
 
-    const method = parts[0] || "Lain-lain";
+    const method = p.paymentMethod.split("|")[0].trim() || "Lain-lain";
     paymentMethodMap.set(method, (paymentMethodMap.get(method) || 0) + 1);
   }
 

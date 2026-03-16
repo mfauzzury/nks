@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import pkg from "@prisma/client";
-import type { CounterDepositType, SpgPayrollPaymentChannel } from "@prisma/client";
 import { Router } from "express";
 import multer from "multer";
 
@@ -16,30 +15,6 @@ import { sendError, sendOk } from "../utils/responses.js";
 import { counterDepositCreateSchema, counterDepositsQuerySchema, counterPaymentCreateSchema, counterPaymentsQuerySchema, counterSpgBatchCreateSchema } from "./schemas.js";
 
 export const counterRouter = Router();
-
-const GuestPaymentSource = {
-  COUNTER_COLLECTION: "COUNTER_COLLECTION",
-} as const;
-const CounterReconStatus = {
-  unbatched: "unbatched",
-  batched: "batched",
-} as const;
-const CounterPaymentChannel = {
-  COUNTER_CASH: "COUNTER_CASH",
-  COUNTER_CARD_TERMINAL: "COUNTER_CARD_TERMINAL",
-} as const;
-const CounterDepositStatus = {
-  submitted: "submitted",
-} as const;
-const ReconciliationCaseStatus = {
-  open: "open",
-  investigating: "investigating",
-} as const;
-const SpgPayrollBatchStatus = {
-  cancelled: "cancelled",
-  paid_failed: "paid_failed",
-  pending_payment: "pending_payment",
-} as const;
 
 const depositSlipStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, env.uploadDir),
@@ -83,6 +58,33 @@ function parseDate(input?: string) {
   return Number.isNaN(dt.getTime()) ? undefined : dt;
 }
 
+function normalizeCounterZakatItems(input: {
+  zakatItems?: Array<{ zakatType: string; financialYear: string; amount: number }>;
+  zakatType?: string;
+  financialYear?: string;
+  amount?: number;
+}) {
+  const fromItems = Array.isArray(input.zakatItems) ? input.zakatItems : [];
+  const cleaned = fromItems
+    .map((x) => ({
+      zakatType: String(x.zakatType || "").trim(),
+      financialYear: String(x.financialYear || "").trim(),
+      amount: Number(x.amount || 0),
+    }))
+    .filter((x) => x.zakatType && /^\d{4}$/.test(x.financialYear) && Number.isFinite(x.amount) && x.amount > 0);
+
+  if (cleaned.length > 0) return cleaned;
+
+  const legacyType = String(input.zakatType || "").trim();
+  const legacyYear = String(input.financialYear || "").trim();
+  const legacyAmount = Number(input.amount || 0);
+  if (legacyType && /^\d{4}$/.test(legacyYear) && Number.isFinite(legacyAmount) && legacyAmount > 0) {
+    return [{ zakatType: legacyType, financialYear: legacyYear, amount: legacyAmount }];
+  }
+
+  return [];
+}
+
 function isCounterOnly(role: string) {
   return role.trim().toLowerCase() === "counter";
 }
@@ -99,28 +101,53 @@ counterRouter.post("/payments", async (req: AuthedRequest, res) => {
     COUNTER_DEBIT: "Debit",
     COUNTER_QR: "QR",
   };
-  const paymentMethod = `${channelLabels[input.paymentChannel] || input.paymentChannel} | ${input.zakatType} | Tahun ${input.financialYear}`;
+  const zakatItems = normalizeCounterZakatItems(input);
+  if (zakatItems.length === 0) {
+    return sendError(res, 400, "VALIDATION_ERROR", "At least one zakat item is required");
+  }
+  const totalAmount = zakatItems.reduce((sum, item) => sum + Number(item.amount), 0);
+  if (typeof input.amount === "number") {
+    const roundedInput = Math.round(input.amount * 100) / 100;
+    const roundedItems = Math.round(totalAmount * 100) / 100;
+    if (roundedInput !== roundedItems) {
+      return sendError(res, 400, "VALIDATION_ERROR", "amount must match zakatItems total");
+    }
+  }
+  const paymentMethod = zakatItems.length === 1
+    ? `${channelLabels[input.paymentChannel] || input.paymentChannel} | ${zakatItems[0].zakatType} | Tahun ${zakatItems[0].financialYear}`
+    : `${channelLabels[input.paymentChannel] || input.paymentChannel} | Multi Zakat (${zakatItems.length}) | Tahun Campuran`;
 
-  const row = await prisma.guestPayment.create({
-    data: {
-      receiptNo: buildCounterReceiptNo(),
-      guestName: input.guestName,
-      identityNo: normalizeIdentity(input.identityNo),
-      email: input.email,
-      amount: input.amount,
-      paymentMethod,
-      status: "success",
-      source: GuestPaymentSource.COUNTER_COLLECTION,
-      counterChannel: input.paymentChannel,
-      collectedByUserId: actor.id,
-      collectionPoint: input.collectionPoint,
-      terminalRrn: input.terminalRef?.rrn,
-      terminalAuthCode: input.terminalRef?.authCode,
-      terminalTid: input.terminalRef?.tid,
-      terminalMid: input.terminalRef?.mid,
-      reconStatus: CounterReconStatus.unbatched,
-      notes: input.notes,
-    },
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.guestPayment.create({
+      data: {
+        receiptNo: buildCounterReceiptNo(),
+        guestName: input.guestName,
+        identityNo: normalizeIdentity(input.identityNo),
+        email: input.email,
+        amount: totalAmount,
+        paymentMethod,
+        status: "success",
+        source: GuestPaymentSource.COUNTER_COLLECTION,
+        counterChannel: input.paymentChannel,
+        collectedByUserId: actor.id,
+        collectionPoint: input.collectionPoint,
+        terminalRrn: input.terminalRef?.rrn,
+        terminalAuthCode: input.terminalRef?.authCode,
+        terminalTid: input.terminalRef?.tid,
+        terminalMid: input.terminalRef?.mid,
+        reconStatus: CounterReconStatus.unbatched,
+        notes: input.notes,
+      },
+    });
+    await tx.guestPaymentZakatItem.createMany({
+      data: zakatItems.map((item) => ({
+        guestPaymentId: created.id,
+        zakatType: item.zakatType,
+        financialYear: item.financialYear,
+        amount: item.amount,
+      })),
+    });
+    return created;
   });
 
   await writeAuditLog({
@@ -129,9 +156,10 @@ counterRouter.post("/payments", async (req: AuthedRequest, res) => {
     action: "CREATE",
     newValueJson: {
       receiptNo: row.receiptNo,
-      amount: input.amount,
+      amount: totalAmount,
       paymentChannel: input.paymentChannel,
       collectionPoint: input.collectionPoint,
+      zakatItems,
     },
     performedBy: actor.id,
     ipAddress: req.ip,
@@ -143,6 +171,9 @@ counterRouter.post("/payments", async (req: AuthedRequest, res) => {
     paidAt: row.paidAt.toISOString(),
     amount: Number(row.amount),
     status: row.status,
+    paymentChannel: input.paymentChannel,
+    collectionPoint: input.collectionPoint,
+    zakatItems,
   });
 });
 
@@ -185,6 +216,7 @@ counterRouter.get("/payments", async (req: AuthedRequest, res) => {
       include: {
         collectedByUser: { select: { id: true, name: true, role: true } },
         depositBatch: { select: { id: true, referenceNo: true, status: true } },
+        zakatItems: { select: { id: true, zakatType: true, financialYear: true, amount: true } },
       },
     }),
     prisma.guestPayment.count({ where }),
@@ -195,6 +227,7 @@ counterRouter.get("/payments", async (req: AuthedRequest, res) => {
     rows.map((row) => ({
       ...row,
       amount: Number(row.amount),
+      zakatItems: row.zakatItems.map((item) => ({ ...item, amount: Number(item.amount) })),
     })),
     { page: query.page, limit: query.limit, total },
   );
@@ -212,6 +245,7 @@ counterRouter.get("/payments/:id", async (req: AuthedRequest, res) => {
     include: {
       collectedByUser: { select: { id: true, name: true, role: true } },
       depositBatch: { select: { id: true, referenceNo: true, status: true } },
+      zakatItems: { select: { id: true, zakatType: true, financialYear: true, amount: true } },
     },
   });
   if (!row || row.source !== GuestPaymentSource.COUNTER_COLLECTION) {
@@ -224,6 +258,7 @@ counterRouter.get("/payments/:id", async (req: AuthedRequest, res) => {
   return sendOk(res, {
     ...row,
     amount: Number(row.amount),
+    zakatItems: row.zakatItems.map((item) => ({ ...item, amount: Number(item.amount) })),
   });
 });
 
@@ -436,6 +471,12 @@ counterRouter.get("/deposits/:id", async (req: AuthedRequest, res) => {
     ? await prisma.guestPayment.findMany({
         where: { id: { in: paymentIds } },
         orderBy: { paidAt: "asc" },
+        include: {
+          zakatItems: {
+            select: { id: true, zakatType: true, financialYear: true, amount: true },
+            orderBy: { id: "asc" },
+          },
+        },
       })
     : [];
 
@@ -444,7 +485,11 @@ counterRouter.get("/deposits/:id", async (req: AuthedRequest, res) => {
     declaredAmount: Number(batch.declaredAmount),
     systemAmount: Number(batch.systemAmount),
     varianceAmount: Number(batch.varianceAmount),
-    payments: payments.map((p) => ({ ...p, amount: Number(p.amount) })),
+    payments: payments.map((p) => ({
+      ...p,
+      amount: Number(p.amount),
+      zakatItems: p.zakatItems.map((item) => ({ ...item, amount: Number(item.amount) })),
+    })),
     items: batch.items.map((item) => ({ ...item, amount: Number(item.amount) })),
   });
 });

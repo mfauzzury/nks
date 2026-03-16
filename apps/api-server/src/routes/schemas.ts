@@ -387,9 +387,16 @@ export const counterPaymentCreateSchema = z
     identityNo: z.string().trim().min(3).max(30),
     email: z.string().email().optional(),
     phone: z.string().trim().optional(),
-    zakatType: z.string().trim().min(1),
-    financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
-    amount: z.number().positive(),
+    zakatType: z.string().trim().min(1).optional(),
+    financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format").optional(),
+    amount: z.number().positive().optional(),
+    zakatItems: z.array(
+      z.object({
+        zakatType: z.string().trim().min(1),
+        financialYear: z.string().regex(/^\d{4}$/, "financialYear must be in YYYY format"),
+        amount: z.number().positive(),
+      }),
+    ).min(1).optional(),
     paymentChannel: counterPaymentChannelSchema,
     collectionPoint: z.string().trim().min(1).max(120),
     terminalRef: z
@@ -403,6 +410,15 @@ export const counterPaymentCreateSchema = z
     notes: z.string().trim().max(2000).optional(),
   })
   .superRefine((value, ctx) => {
+    const hasItems = Array.isArray(value.zakatItems) && value.zakatItems.length > 0;
+    const hasLegacy = Boolean(value.zakatType && value.financialYear && value.amount && value.amount > 0);
+    if (!hasItems && !hasLegacy) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide either zakatItems[] or legacy zakatType+financialYear+amount",
+        path: ["zakatItems"],
+      });
+    }
     if (value.paymentChannel === "COUNTER_CARD_TERMINAL" && !value.terminalRef) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

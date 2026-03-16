@@ -991,6 +991,14 @@ payersRouter.get("/:id/stats", async (req, res) => {
       ...dateFilter,
     },
     orderBy: { paidAt: "desc" },
+    include: {
+      zakatItems: {
+        select: {
+          zakatType: true,
+          amount: true,
+        },
+      },
+    },
   });
 
   let totalPaid = 0;
@@ -1019,9 +1027,16 @@ payersRouter.get("/:id/stats", async (req, res) => {
     }
     monthMap.set(monthKey, monthEntry);
 
-    const parts = p.paymentMethod.split("|").map((s) => s.trim());
-    const zakatType = parts.length > 1 ? parts[1] : "Lain-lain";
-    zakatMap.set(zakatType, (zakatMap.get(zakatType) ?? 0) + amount);
+    if (p.zakatItems.length > 0) {
+      for (const item of p.zakatItems) {
+        const label = item.zakatType || "Lain-lain";
+        zakatMap.set(label, (zakatMap.get(label) ?? 0) + Number(item.amount || 0));
+      }
+    } else {
+      const parts = p.paymentMethod.split("|").map((s) => s.trim());
+      const zakatType = parts.length > 1 ? parts[1] : "Lain-lain";
+      zakatMap.set(zakatType, (zakatMap.get(zakatType) ?? 0) + amount);
+    }
   }
 
   const monthNames: Record<string, string> = {
@@ -1043,19 +1058,32 @@ payersRouter.get("/:id/stats", async (req, res) => {
     .map(([type, amount]) => ({ type, amount }));
 
   const recentTransactions = payments.slice(0, 10).map((p) => {
-    const parts = p.paymentMethod.split("|").map((s) => s.trim());
     const isCorporate = p.receiptNo.startsWith("CRCPT-");
+    let zakatType: string;
+    let paymentChannel: string;
+    if (p.zakatItems.length > 0) {
+      const unique = new Set<string>();
+      for (const item of p.zakatItems) {
+        if (item.zakatType) unique.add(item.zakatType);
+      }
+      zakatType = unique.size > 0 ? Array.from(unique).join(", ") : "Lain-lain";
+      paymentChannel = p.paymentMethod.split("|")[0].trim();
+    } else {
+      const parts = p.paymentMethod.split("|").map((s) => s.trim());
+      zakatType = parts.length > 1 ? parts[1] : "Lain-lain";
+      paymentChannel = parts[0];
+    }
     return {
       id: p.id,
       date: p.paidAt.toISOString(),
       amount: Number(p.amount),
       source: isCorporate ? "Korporat" : "Individu",
-      zakatType: parts.length > 1 ? parts[1] : "Lain-lain",
+      zakatType,
       status: p.status,
       receiptNo: p.receiptNo,
       payerName: p.guestName,
       identityNo: p.identityNo,
-      paymentMethod: parts[0],
+      paymentMethod: paymentChannel,
     };
   });
 

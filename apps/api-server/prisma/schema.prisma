@@ -534,12 +534,26 @@ model GuestPayment {
   createdAt     DateTime @default(now())
   collectedByUser User? @relation("CounterCollectedPayments", fields: [collectedByUserId], references: [id], onDelete: SetNull)
   depositBatch CounterDepositBatch? @relation(fields: [depositBatchId], references: [id], onDelete: SetNull)
+  zakatItems    GuestPaymentZakatItem[]
 
   @@index([identityNo, paidAt])
   @@index([status, paidAt])
   @@index([source, paidAt])
   @@index([reconStatus, paidAt])
   @@index([depositBatchId])
+}
+
+model GuestPaymentZakatItem {
+  id            Int         @id @default(autoincrement())
+  guestPaymentId Int
+  zakatType     String
+  financialYear String
+  amount        Decimal     @db.Decimal(18, 2)
+  createdAt     DateTime    @default(now())
+  guestPayment  GuestPayment @relation(fields: [guestPaymentId], references: [id], onDelete: Cascade)
+
+  @@index([guestPaymentId])
+  @@index([zakatType, financialYear])
 }
 
 model CounterDepositBatch {

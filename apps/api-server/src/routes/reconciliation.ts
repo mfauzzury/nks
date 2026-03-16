@@ -374,7 +374,16 @@ reconciliationRouter.get("/cases", async (req: AuthedRequest, res) => {
       skip: (query.page - 1) * query.limit,
       take: query.limit,
       include: {
-        batch: { select: { id: true, referenceNo: true, depositType: true, status: true, systemAmount: true } },
+        batch: {
+          select: {
+            id: true,
+            referenceNo: true,
+            depositType: true,
+            status: true,
+            systemAmount: true,
+            _count: { select: { items: true } },
+          },
+        },
         statementLine: { select: { id: true, lineNo: true, txnDate: true, description: true, referenceNo: true, netAmount: true, matchStatus: true } },
         assignedToUser: { select: { id: true, name: true, role: true } },
         resolvedByUser: { select: { id: true, name: true, role: true } },
@@ -390,8 +399,12 @@ reconciliationRouter.get("/cases", async (req: AuthedRequest, res) => {
       differenceAmount: row.differenceAmount == null ? null : Number(row.differenceAmount),
       batch: row.batch
         ? {
-            ...row.batch,
+            id: row.batch.id,
+            referenceNo: row.batch.referenceNo,
+            depositType: row.batch.depositType,
+            status: row.batch.status,
             systemAmount: Number(row.batch.systemAmount),
+            itemCount: row.batch._count.items,
           }
         : null,
       statementLine: row.statementLine
@@ -536,7 +549,17 @@ reconciliationRouter.post("/deposits/:id/confirm", async (req: AuthedRequest, re
   const systemAmount = Number(batch.systemAmount);
   const variance = Math.round((systemAmount - matchedTotal) * 100) / 100;
   if (variance !== 0) {
-    return sendError(res, 400, "VALIDATION_ERROR", "Batch cannot be confirmed because matched amount does not equal system amount");
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      `Batch cannot be confirmed: matched RM ${matchedTotal.toFixed(2)} != system RM ${systemAmount.toFixed(2)} (variance RM ${Math.abs(variance).toFixed(2)})`,
+      {
+        matchedTotal,
+        systemAmount,
+        variance,
+      },
+    );
   }
 
   await prisma.$transaction(async (tx) => {
