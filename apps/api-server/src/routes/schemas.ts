@@ -496,3 +496,13 @@ export const reconciliationResolveSchema = z.object({
   batchId: z.number().int().positive().optional(),
   reason: z.string().trim().optional(),
 });
+
+export const storefrontMenuItemSchema = z.object({
+  id: z.string().trim().min(1).max(80).optional(),
+  label: z.string().trim().min(1).max(100),
+  href: z.string().trim().min(1).max(500),
+  parentId: z.string().trim().min(1).max(80).nullable().optional(),
+  openInNewTab: z.boolean().default(false),
+});
+
+export const storefrontMenuSchema = z.array(storefrontMenuItemSchema).max(20);

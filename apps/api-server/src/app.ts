@@ -28,6 +28,7 @@ import { scheduledPaymentsRouter } from "./routes/scheduled-payments.js";
 import { rolesRouter } from "./routes/roles.js";
 import { settingsRouter } from "./routes/settings.js";
 import { spgRouter } from "./routes/spg.js";
+import { publicRouter } from "./routes/public.js";
 import { statusRouter } from "./routes/status.js";
 import { usersRouter } from "./routes/users.js";
 import { sendError } from "./utils/responses.js";
@@ -49,6 +50,7 @@ app.use(issueCsrfCookie);
 app.use("/uploads", express.static(env.uploadDir));
 
 app.use("/api", healthRouter);
+app.use("/api/public", publicRouter);
 app.use("/api/auth", authPublicRouter);
 
 app.use((req, res, next) => {
@@ -79,7 +81,7 @@ app.use((req, res, next) => {
   const isPublicScheduledPaymentRead =
     req.path.startsWith("/api/scheduled-payments/by-identity/") && req.method === "GET";
 
-  if (req.path === "/api/health" || req.path === "/api/auth/login") {
+  if (req.path === "/api/health" || req.path === "/api/auth/login" || req.path.startsWith("/api/public")) {
     return next();
   }
   if (req.path === "/api/settings" && req.method === "GET") {

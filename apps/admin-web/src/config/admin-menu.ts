@@ -175,6 +175,7 @@ export const DEFAULT_MENU: MenuGroupDef[] = [
         permission: "settings.view",
         children: [
           { label: "General", to: "/settings" },
+          { label: "Webfront", to: "/settings/webfront" },
           { label: "Users", to: "/settings/users" },
           { label: "Roles", to: "/settings/roles" },
           { label: "System", to: "/settings/system" },

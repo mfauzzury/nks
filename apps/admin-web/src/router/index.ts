@@ -57,6 +57,10 @@ import CounterDepositsView from "@/views/CounterDepositsView.vue";
 import CounterReconciliationView from "@/views/CounterReconciliationView.vue";
 import CounterPosView from "@/views/CounterPosView.vue";
 import ScheduledPaymentsView from "@/views/ScheduledPaymentsView.vue";
+import StorefrontHomeView from "@/views/StorefrontHomeView.vue";
+import StorefrontMenuView from "@/views/StorefrontMenuView.vue";
+import StorefrontPageView from "@/views/StorefrontPageView.vue";
+import WebfrontSettingsView from "@/views/WebfrontSettingsView.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 
@@ -132,6 +136,10 @@ const router = createRouter({
       component: { template: "" },
     },
     { path: "/settings", name: "settings", component: SettingsView, meta: { requiresAuth: true, title: "Settings" } },
+    { path: "/settings/webfront", name: "webfront-settings", component: WebfrontSettingsView, meta: { requiresAuth: true, title: "Webfront Settings" } },
+    { path: "/storefront", name: "storefront-home", component: StorefrontHomeView, meta: { title: "Storefront" } },
+    { path: "/storefront/menu", name: "storefront-menu", component: StorefrontMenuView, meta: { title: "Storefront Menu" } },
+    { path: "/storefront/page/:slug", name: "storefront-page", component: StorefrontPageView, meta: { title: "Storefront Page" } },
     { path: "/settings/users", name: "settings-users", component: UsersView, meta: { requiresAuth: true, title: "Users" } },
     { path: "/settings/users/new", name: "user-create", component: UserEditView, meta: { requiresAuth: true, title: "New User" } },
     { path: "/settings/users/:id", name: "user-edit", component: UserEditView, meta: { requiresAuth: true, title: "Edit User" } },
