@@ -117,7 +117,7 @@ async function saveProfile() {
         isActive: profileForm.value.isActive,
       });
       toast.success("User created");
-      router.push("/admin/settings/users");
+      router.push("/settings/users");
       return;
     }
 
@@ -238,7 +238,7 @@ onMounted(load);
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <router-link
-            to="/admin/settings/users"
+            to="/settings/users"
             class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             v-if="!isSelf"
           >

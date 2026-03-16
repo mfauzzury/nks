@@ -51,7 +51,7 @@ onMounted(load);
       <div class="flex items-center justify-between">
         <h1 class="page-title">Users</h1>
         <router-link
-          to="/admin/settings/users/new"
+          to="/settings/users/new"
           class="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800"
         >
           <Plus class="h-4 w-4" />
@@ -79,7 +79,7 @@ onMounted(load);
             <tbody class="divide-y divide-slate-100">
               <tr v-for="user in users" :key="user.id" class="transition-colors hover:bg-slate-50">
                 <td class="px-4 py-2 font-medium text-slate-900">
-                  <router-link :to="'/admin/settings/users/' + user.id" class="hover:text-violet-600">{{ user.name }}</router-link>
+                  <router-link :to="'/settings/users/' + user.id" class="hover:text-violet-600">{{ user.name }}</router-link>
                 </td>
                 <td class="px-4 py-2 text-slate-500">{{ user.email }}</td>
                 <td class="px-4 py-2">
@@ -95,7 +95,7 @@ onMounted(load);
                 </td>
                 <td class="px-4 py-2 text-right">
                   <div class="flex items-center justify-end gap-1.5">
-                    <router-link :to="'/admin/settings/users/' + user.id" class="group relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
+                    <router-link :to="'/settings/users/' + user.id" class="group relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
                       <Pencil class="h-3.5 w-3.5" />
                       <span class="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Edit</span>
                     </router-link>

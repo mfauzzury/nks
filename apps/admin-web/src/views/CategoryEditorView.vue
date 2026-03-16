@@ -46,7 +46,7 @@ async function save() {
       await createCategory(payload);
       toast.success("Category created");
     }
-    router.push("/admin/categories");
+    router.push("/categories");
   } catch (e) {
     toast.error("Save failed", e instanceof Error ? e.message : "Unable to save category.");
   }
@@ -96,7 +96,7 @@ onMounted(load);
         </button>
         <button
           class="flex items-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-          @click="router.push('/admin/categories')"
+          @click="router.push('/categories')"
         >
           <X class="h-4 w-4" />
           Cancel

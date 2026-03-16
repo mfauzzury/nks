@@ -38,6 +38,7 @@ const form = ref<SettingsPayload>({
   siteIconUrl: "",
   webfrontLogoUrl: "",
   sidebarLogoUrl: "",
+  portalLogoUrl: "",
   faviconUrl: "",
   language: "en",
   timezone: "UTC",

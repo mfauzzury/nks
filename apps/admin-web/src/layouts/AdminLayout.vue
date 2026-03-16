@@ -119,7 +119,7 @@ async function signOut() {
   try {
     await auth.signOut();
     toast.success("Signed out", "You have been logged out.");
-    router.push("/admin/login");
+    router.push("/login");
   } catch (e) {
     toast.error("Sign out failed", e instanceof Error ? e.message : "Please try again.");
   }
@@ -217,7 +217,7 @@ watch(
         <AppToastRegion />
 
         <router-link
-          :to="'/admin/settings/users/' + auth.user?.id"
+          :to="'/settings/users/' + auth.user?.id"
           class="group relative flex h-full items-center gap-2 px-4 transition-colors hover:bg-[var(--accent-600)]"
         >
           <div

@@ -114,7 +114,7 @@ async function save() {
       await createPost(payload);
       toast.success("Post created");
     }
-    router.push("/admin/posts");
+    router.push("/posts");
   } catch (e) {
     toast.error("Save failed", e instanceof Error ? e.message : "Unable to save post.");
   }
@@ -199,7 +199,7 @@ onMounted(load);
                 </button>
                 <button
                   class="flex items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-                  @click="router.push('/admin/posts')"
+                  @click="router.push('/posts')"
                 >
                   <X class="h-4 w-4" />
                 </button>
